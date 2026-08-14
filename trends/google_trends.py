@@ -2,44 +2,29 @@ import requests
 import xml.etree.ElementTree as ET
 
 
-GOOGLE_TRENDS_URL = (
-    "https://trends.google.com/trending/rss"
-)
-
-
 def get_google_trends(
-    country: str = "US",
-    limit: int = 20
+    country="US",
+    limit=20
 ):
-    """
-    Получает актуальные тренды Google Trends.
-
-    country:
-        US - United States
-        GB - United Kingdom
-        CA - Canada
-        AU - Australia
-
-    limit:
-        Максимальное количество трендов.
-    """
-
-    url = f"{GOOGLE_TRENDS_URL}?geo={country}"
 
     print(
-        f"🌍 Получаем Google Trends: {country}"
+        f"🌍 Google Trends: {country}"
+    )
+
+    url = (
+        "https://trends.google.com/"
+        "trending/rss"
+        f"?geo={country}"
     )
 
     try:
 
         response = requests.get(
             url,
-            timeout=15,
+            timeout=20,
             headers={
-                "User-Agent": (
-                    "Mozilla/5.0 "
-                    "(Windows NT 10.0; Win64; x64)"
-                )
+                "User-Agent":
+                    "Mozilla/5.0"
             }
         )
 
@@ -49,11 +34,7 @@ def get_google_trends(
             response.content
         )
 
-        trends = []
-
-        namespace = {
-            "ht": "https://trends.google.com/trending/rss"
-        }
+        results = []
 
         for item in root.findall(".//item"):
 
@@ -62,28 +43,22 @@ def get_google_trends(
             if not title:
                 continue
 
-            traffic = item.findtext(
-                "{https://trends.google.com/trending/rss}"
-                "approx_traffic"
-            )
+            results.append({
 
-            trends.append(
-                {
-                    "source": "google",
-                    "title": title.strip(),
-                    "traffic": traffic or "unknown"
-                }
-            )
+                "source": "google",
 
-            if len(trends) >= limit:
+                "title": title.strip()
+
+            })
+
+            if len(results) >= limit:
                 break
 
         print(
-            f"✅ Google Trends: "
-            f"{len(trends)} тем"
+            f"✅ Google: {len(results)} trends"
         )
 
-        return trends
+        return results
 
     except Exception as error:
 
