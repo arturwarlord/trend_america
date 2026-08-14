@@ -13,6 +13,7 @@ from google import genai
 API_KEY = os.getenv("GEMINI_KEY")
 
 if not API_KEY:
+
     raise RuntimeError(
         "❌ GEMINI_KEY is not configured"
     )
@@ -36,8 +37,6 @@ MODEL_NAME = "gemini-3.5-flash-lite"
 
 BATCH_SIZE = 10
 
-TARGET_APPROVED = 10
-
 MAX_RETRIES = 3
 
 RETRY_DELAY = 3
@@ -57,9 +56,9 @@ MIN_STORY_POTENTIAL = 5
 
 HARD_BLOCK_PATTERNS = [
 
-    # ==============================================
+    # =====================================================
     # GAMING
-    # ==============================================
+    # =====================================================
 
     r"\bminecraft\b",
     r"\broblox\b",
@@ -83,9 +82,9 @@ HARD_BLOCK_PATTERNS = [
     r"\bserver\b.*\bgame\b",
     r"\bgame\b.*\bserver\b",
 
-    # ==============================================
+    # =====================================================
     # MUSIC
-    # ==============================================
+    # =====================================================
 
     r"\bdance practice\b",
     r"\bmusic video\b",
@@ -103,9 +102,9 @@ HARD_BLOCK_PATTERNS = [
     r"\bperformance video\b",
     r"\bmusic battle\b",
 
-    # ==============================================
+    # =====================================================
     # ANIME / FICTION
-    # ==============================================
+    # =====================================================
 
     r"\banime\b",
     r"\bmanga\b",
@@ -118,18 +117,18 @@ HARD_BLOCK_PATTERNS = [
     r"\bmarvel\b",
     r"\bdc comics\b",
 
-    # ==============================================
+    # =====================================================
     # TRAILERS
-    # ==============================================
+    # =====================================================
 
     r"\btrailer\b",
     r"\bteaser\b",
     r"\bteaser trailer\b",
     r"\bofficial trailer\b",
 
-    # ==============================================
+    # =====================================================
     # LIVESTREAM / REACTION / FAN
-    # ==============================================
+    # =====================================================
 
     r"\blive stream\b",
     r"\blivestream\b",
@@ -141,9 +140,9 @@ HARD_BLOCK_PATTERNS = [
     r"\bfan edit\b",
     r"\bfan content\b",
 
-    # ==============================================
+    # =====================================================
     # SPORTS MATCHES
-    # ==============================================
+    # =====================================================
 
     r"\bvs\b",
     r"\bversus\b",
@@ -153,7 +152,6 @@ HARD_BLOCK_PATTERNS = [
     r"\bfinal score\b",
     r"\bscorecard\b",
     r"\btournament\b",
-
 ]
 
 
@@ -182,10 +180,55 @@ ENTERTAINMENT_PATTERNS = [
 
 
 # =========================================================
+# KNOWN ENTERTAINMENT NAMES
+# =========================================================
+
+ENTERTAINMENT_NAMES = {
+
+    "home alone",
+    "stranger things",
+    "avengers",
+    "spiderman",
+    "batman",
+    "superman",
+    "pokemon",
+    "shinchan",
+    "one piece",
+    "naruto",
+    "dragon ball",
+
+}
+
+
+# =========================================================
+# ALLOWED CATEGORIES
+# =========================================================
+
+ALLOWED_CATEGORIES = {
+
+    "technology",
+    "ai",
+    "science",
+    "space",
+    "psychology",
+    "business",
+    "history",
+    "engineering",
+    "future",
+    "discovery",
+    "world",
+    "mystery",
+    "other",
+
+}
+
+
+# =========================================================
 # SYSTEM PROMPT
 # =========================================================
 
 SYSTEM_PROMPT = """
+
 You are an expert global YouTube Shorts trend analyst.
 
 Your job is to evaluate TRENDING TOPICS for an automated
@@ -212,6 +255,7 @@ They may explain:
 - surprising human behavior
 - future technology
 
+
 ==================================================
 CRITICAL RULE
 ==================================================
@@ -220,15 +264,18 @@ The input is a TREND TITLE.
 
 It may be short.
 
-Do NOT require the entire story to be contained in the title.
+Do NOT require the entire story to be contained in
+the title.
 
 However:
 
-DO NOT INVENT a specific event, product update, statistic,
-price, launch, discovery or claim that is not reasonably
-indicated by the topic.
+DO NOT INVENT a specific event, product update,
+statistic, price, launch, discovery or claim that is
+not reasonably indicated by the topic.
 
-You are evaluating whether the topic is worth researching.
+You are evaluating whether the topic is worth
+researching.
+
 
 ==================================================
 GOOD EXAMPLES
@@ -263,18 +310,19 @@ Stronger.
 Potentially useful as a business subject,
 but the exact story needs research.
 
+
 ==================================================
 IMPORTANT
 ==================================================
 
-A famous keyword does NOT automatically mean that the topic
-is good.
+A famous keyword does NOT automatically mean that
+the topic is good.
 
 For example:
 
 "HOME ALONE"
 
-Although famous, this is primarily entertainment/movie
+Although famous, this is primarily entertainment
 content.
 
 It should normally be rejected unless the title itself
@@ -290,6 +338,7 @@ Do NOT automatically invent:
 "production history"
 
 just because a movie is famous.
+
 
 ==================================================
 REJECT
@@ -323,6 +372,7 @@ generic celebrity content
 vague entertainment
 fiction
 
+
 ==================================================
 SPORTS
 ==================================================
@@ -339,17 +389,23 @@ Potentially accept REAL-WORLD sports stories such as:
 
 The title must indicate an actual story.
 
+
 ==================================================
 MUSIC
 ==================================================
 
-Reject songs, music videos, dance practices and performances.
+Reject songs, music videos, dance practices
+and performances.
 
-Potentially accept real-world music industry stories such as:
+Potentially accept real-world music industry
+stories such as:
 
 "Spotify changes royalty system"
 
 "music streaming revenue falls"
+
+But the title must indicate the actual story.
+
 
 ==================================================
 ENTERTAINMENT
@@ -363,14 +419,16 @@ Potentially accept real-world industry stories such as:
 
 "Netflix changes subscription policy"
 
-But only when the title itself indicates the real-world story.
+But only when the title itself indicates the
+real-world story.
+
 
 ==================================================
 GLOBAL AUDIENCE
 ==================================================
 
-Prefer topics understandable and interesting to an English-speaking
-global audience.
+Prefer topics understandable and interesting to an
+English-speaking global audience.
 
 High value:
 
@@ -391,6 +449,7 @@ local entertainment
 local fandom
 local-language entertainment
 obscure local personalities
+
 
 ==================================================
 STORY POTENTIAL
@@ -420,6 +479,7 @@ What changed?
 
 What surprising fact is connected to it?
 
+
 ==================================================
 SCORING
 ==================================================
@@ -448,8 +508,9 @@ specificity: 4
 factual_confidence: 8
 originality: 7
 
-However, specificity below the required threshold will
-cause Python to reject it.
+However, specificity below the required threshold
+will cause Python to reject it.
+
 
 ==================================================
 CATEGORY
@@ -470,6 +531,7 @@ discovery
 world
 mystery
 other
+
 
 ==================================================
 OUTPUT
@@ -510,6 +572,7 @@ IMPORTANT:
 Python will make the final approval decision.
 
 Do not try to manipulate the final boolean.
+
 """
 
 
@@ -522,7 +585,9 @@ def normalize_topic(topic):
     if not topic:
         return ""
 
-    return str(topic).strip()
+    return str(
+        topic
+    ).strip()
 
 
 # =========================================================
@@ -566,6 +631,10 @@ def is_entertainment(topic):
 
     text = topic.lower().strip()
 
+    if text in ENTERTAINMENT_NAMES:
+
+        return True
+
     for pattern in ENTERTAINMENT_PATTERNS:
 
         try:
@@ -595,55 +664,53 @@ def pre_filter_topics(topics):
 
     blocked = []
 
+    seen = set()
+
     for topic in topics:
 
-        topic = normalize_topic(topic)
+        topic = normalize_topic(
+            topic
+        )
 
         if not topic:
-
             continue
+
+        key = topic.lower()
+
+        if key in seen:
+            continue
+
+        seen.add(
+            key
+        )
+
+        # ----------------------------------------------
+        # HARD BLOCK
+        # ----------------------------------------------
 
         if is_hard_blocked(topic):
 
-            blocked.append(topic)
+            blocked.append(
+                topic
+            )
 
             continue
 
         # ----------------------------------------------
-        # Known entertainment-only names
+        # ENTERTAINMENT
         # ----------------------------------------------
-
-        lower = topic.lower()
-
-        entertainment_names = [
-
-            "home alone",
-            "stranger things",
-            "avengers",
-            "spiderman",
-            "batman",
-            "superman",
-            "pokemon",
-            "shinchan",
-            "one piece",
-            "naruto",
-            "dragon ball",
-
-        ]
-
-        if lower in entertainment_names:
-
-            blocked.append(topic)
-
-            continue
 
         if is_entertainment(topic):
 
-            blocked.append(topic)
+            blocked.append(
+                topic
+            )
 
             continue
 
-        allowed.append(topic)
+        allowed.append(
+            topic
+        )
 
     return allowed, blocked
 
@@ -655,12 +722,16 @@ def pre_filter_topics(topics):
 def clean_json(text):
 
     if not text:
-
         return ""
 
-    text = text.strip()
+    text = str(
+        text
+    ).strip()
 
+    # ----------------------------------------------
     # Remove markdown fences
+    # ----------------------------------------------
+
     text = re.sub(
         r"^```json\s*",
         "",
@@ -683,12 +754,16 @@ def clean_json(text):
     text = text.strip()
 
     # ----------------------------------------------
-    # Find array
+    # Find JSON array
     # ----------------------------------------------
 
-    start = text.find("[")
+    start = text.find(
+        "["
+    )
 
-    end = text.rfind("]")
+    end = text.rfind(
+        "]"
+    )
 
     if start != -1 and end != -1:
 
@@ -745,7 +820,9 @@ def normalize_number(value):
 
     try:
 
-        value = float(value)
+        value = float(
+            value
+        )
 
     except Exception:
 
@@ -873,10 +950,14 @@ def validate_result(
         )
 
     # ----------------------------------------------
-    # ALWAYS preserve original topic
+    # Preserve exact original topic
     # ----------------------------------------------
 
     result["topic"] = original_topic
+
+    # ----------------------------------------------
+    # Numeric fields
+    # ----------------------------------------------
 
     numeric_fields = [
 
@@ -903,37 +984,48 @@ def validate_result(
     # Category
     # ----------------------------------------------
 
-    allowed_categories = {
-
-        "technology",
-        "ai",
-        "science",
-        "space",
-        "psychology",
-        "business",
-        "history",
-        "engineering",
-        "future",
-        "discovery",
-        "world",
-        "mystery",
-        "other"
-
-    }
-
     category = result.get(
         "category",
         "other"
     )
 
-    if category not in allowed_categories:
+    if not isinstance(
+        category,
+        str
+    ):
+
+        category = "other"
+
+    category = category.lower().strip()
+
+    if category not in ALLOWED_CATEGORIES:
 
         category = "other"
 
     result["category"] = category
 
     # ----------------------------------------------
-    # SCORE
+    # Reason
+    # ----------------------------------------------
+
+    reason = result.get(
+        "reason",
+        ""
+    )
+
+    if not isinstance(
+        reason,
+        str
+    ):
+
+        reason = str(
+            reason
+        )
+
+    result["reason"] = reason.strip()
+
+    # ----------------------------------------------
+    # Calculate score ourselves
     # ----------------------------------------------
 
     result["score"] = calculate_score(
@@ -941,7 +1033,7 @@ def validate_result(
     )
 
     # ----------------------------------------------
-    # HARD APPROVAL
+    # FINAL APPROVAL
     # ----------------------------------------------
 
     approved = True
@@ -961,10 +1053,6 @@ def validate_result(
     if result["score"] < MIN_SCORE:
 
         approved = False
-
-    # ----------------------------------------------
-    # FINAL DECISION
-    # ----------------------------------------------
 
     result["is_good_for_shorts"] = approved
 
@@ -994,7 +1082,25 @@ def request_gemini(
 
     )
 
-    return response.text
+    if response is None:
+
+        raise ValueError(
+            "Gemini returned None"
+        )
+
+    text = getattr(
+        response,
+        "text",
+        None
+    )
+
+    if not text:
+
+        raise ValueError(
+            "Gemini returned empty response"
+        )
+
+    return text
 
 
 # =========================================================
@@ -1102,6 +1208,7 @@ def build_prompt(
     )
 
     return f"""
+
 {SYSTEM_PROMPT}
 
 ==================================================
@@ -1129,6 +1236,7 @@ Do not rewrite topics.
 Preserve every topic EXACTLY.
 
 Return valid JSON only.
+
 """
 
 
@@ -1143,7 +1251,7 @@ def judge_batch(
 ):
 
     print(
-        f"🚀 Gemini V8 batch request "
+        f"🚀 Gemini AI Judge batch "
         f"{batch_number}/{total_batches}"
     )
 
@@ -1220,7 +1328,7 @@ def judge_batch(
 
 
 # =========================================================
-# JUDGE MULTIPLE TOPICS
+# JUDGE TOPICS
 # =========================================================
 
 def judge_topics(
@@ -1251,9 +1359,9 @@ def judge_topics(
 
         return []
 
-    # ----------------------------------------------
-    # Remove duplicates
-    # ----------------------------------------------
+    # =====================================================
+    # NORMALIZE + REMOVE DUPLICATES
+    # =====================================================
 
     unique_topics = []
 
@@ -1265,14 +1373,12 @@ def judge_topics(
             topic
         )
 
-        key = topic.lower()
-
         if not topic:
-
             continue
 
-        if key in seen:
+        key = topic.lower()
 
+        if key in seen:
             continue
 
         seen.add(
@@ -1286,13 +1392,13 @@ def judge_topics(
     topics = unique_topics
 
     print(
-        f"📊 Topics for AI Judge: "
+        f"📊 Unique topics: "
         f"{len(topics)}"
     )
 
-    # ----------------------------------------------
+    # =====================================================
     # PRE-FILTER
-    # ----------------------------------------------
+    # =====================================================
 
     allowed_topics, blocked_topics = (
         pre_filter_topics(
@@ -1310,15 +1416,15 @@ def judge_topics(
         f"{len(allowed_topics)}"
     )
 
-    # ----------------------------------------------
-    # Results
-    # ----------------------------------------------
+    # =====================================================
+    # RESULTS
+    # =====================================================
 
     results = []
 
-    # ----------------------------------------------
-    # Add hard-block results
-    # ----------------------------------------------
+    # =====================================================
+    # HARD BLOCK RESULTS
+    # =====================================================
 
     for topic in blocked_topics:
 
@@ -1329,12 +1435,16 @@ def judge_topics(
                 topic,
 
                 "Rejected by hard content filter: "
-                "gaming, music, entertainment, sports match, "
-                "trailer, or fan content."
+                "gaming, music, entertainment, "
+                "sports match, trailer, or fan content."
 
             )
 
         )
+
+    # =====================================================
+    # NOTHING LEFT
+    # =====================================================
 
     if not allowed_topics:
 
@@ -1352,9 +1462,9 @@ def judge_topics(
 
         return results
 
-    # ----------------------------------------------
-    # BATCHES
-    # ----------------------------------------------
+    # =====================================================
+    # CREATE BATCHES
+    # =====================================================
 
     batches = [
 
@@ -1374,9 +1484,9 @@ def judge_topics(
         batches
     )
 
-    # ----------------------------------------------
-    # PROCESS
-    # ----------------------------------------------
+    # =====================================================
+    # PROCESS BATCHES
+    # =====================================================
 
     for batch_index, batch in enumerate(
         batches,
@@ -1403,9 +1513,9 @@ def judge_topics(
                 2
             )
 
-    # ----------------------------------------------
+    # =====================================================
     # SORT
-    # ----------------------------------------------
+    # =====================================================
 
     results.sort(
 
@@ -1419,42 +1529,26 @@ def judge_topics(
 
     )
 
-    # ----------------------------------------------
-    # PRINT
-    # ----------------------------------------------
+    # =====================================================
+    # PRINT RESULTS
+    # =====================================================
 
     print()
-
-    print(
-        "================================"
-    )
-
-    print(
-        "🤖 AI JUDGE RESULTS"
-    )
-
-    print(
-        "================================"
-    )
-
+    print("================================")
+    print("🤖 AI JUDGE RESULTS")
+    print("================================")
     print()
 
     approved_count = 0
 
     for index, result in enumerate(
-
         results,
-
         start=1
-
     ):
 
         approved = result.get(
-
             "is_good_for_shorts",
-
             False
-
         )
 
         if approved:
@@ -1474,10 +1568,8 @@ def judge_topics(
         )
 
         print(
-
             f"🤖 [{index}/{len(results)}] "
             f"{result.get('topic', '')}"
-
         )
 
         print(
@@ -1485,82 +1577,60 @@ def judge_topics(
         )
 
         print(
-
             f"   Score: "
             f"{result.get('score', 0):.0f}/100"
-
         )
 
         print(
-
             f"   Category: "
             f"{result.get('category', 'other')}"
-
         )
 
         print(
-
             f"   Global: "
             f"{result.get('global_interest', 0):.0f}/10"
-
         )
 
         print(
-
             f"   Viral: "
             f"{result.get('viral_potential', 0):.0f}/10"
-
         )
 
         print(
-
             f"   English: "
             f"{result.get('english_audience', 0):.0f}/10"
-
         )
 
         print(
-
             f"   Story: "
             f"{result.get('story_potential', 0):.0f}/10"
-
         )
 
         print(
-
             f"   Specificity: "
             f"{result.get('specificity', 0):.0f}/10"
-
         )
 
         print(
-
             f"   Facts: "
             f"{result.get('factual_confidence', 0):.0f}/10"
-
         )
 
         print(
-
             f"   Originality: "
             f"{result.get('originality', 0):.0f}/10"
-
         )
 
         print(
-
             f"   Reason: "
             f"{result.get('reason', '')}"
-
         )
 
         print()
 
     print(
-
         f"✅ AI approved: "
         f"{approved_count}/{len(results)}"
-
     )
 
     return results
