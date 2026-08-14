@@ -11,6 +11,10 @@ from ai.trend_judge import (
     judge_topics
 )
 
+from ai.topic_selector import (
+    select_topic
+)
+
 
 # =========================================================
 # SETTINGS
@@ -18,10 +22,7 @@ from ai.trend_judge import (
 
 TARGET_TOPICS = 10
 
-# Сколько кандидатов отдаём AI Judge.
-#
-# Раньше здесь фактически использовалось около 60.
-# Теперь даём Judge больше материала.
+# Сколько кандидатов отдаём AI Judge
 AI_INPUT_LIMIT = 120
 
 
@@ -216,7 +217,7 @@ def main():
     ]
 
     # =====================================================
-    # DISPLAY
+    # DISPLAY AI APPROVED
     # =====================================================
 
     print()
@@ -296,7 +297,7 @@ def main():
             print()
 
     # =====================================================
-    # SAVE
+    # SAVE APPROVED TOPICS
     # =====================================================
 
     save_top_trends(
@@ -304,21 +305,174 @@ def main():
     )
 
     # =====================================================
-    # FINAL STATUS
+    # FINAL TOPIC SELECTION
+    # =====================================================
+
+    if not approved_trends:
+
+        print()
+        print(
+            "❌ No approved topics available "
+            "for final selection."
+        )
+
+        print()
+
+        print(
+            "================================"
+        )
+
+        print(
+            "⚠️ Global trend pipeline finished "
+            "without a final topic"
+        )
+
+        print(
+            "================================"
+        )
+
+        return
+
+    print()
+    print("================================")
+    print("🎯 FINAL TOPIC SELECTION")
+    print("================================")
+    print()
+
+    try:
+
+        selected_topic = select_topic(
+            approved_trends
+        )
+
+    except Exception as e:
+
+        print()
+        print(
+            "❌ Topic Selector failed:"
+        )
+
+        print(
+            f"   {e}"
+        )
+
+        print()
+
+        return
+
+    # =====================================================
+    # CHECK RESULT
+    # =====================================================
+
+    if not selected_topic:
+
+        print(
+            "❌ Topic Selector returned no topic"
+        )
+
+        return
+
+    # =====================================================
+    # DISPLAY FINAL TOPIC
     # =====================================================
 
     print()
+    print("================================")
+    print("🏆 FINAL SELECTED TOPIC")
+    print("================================")
+    print()
+
+    print(
+        f"🔥 Topic: "
+        f"{selected_topic.get('topic', '')}"
+    )
+
+    print(
+        f"📊 Judge Score: "
+        f"{selected_topic.get('judge_score', 0):.0f}/100"
+    )
+
+    print(
+        f"🧠 Final AI Score: "
+        f"{selected_topic.get('final_score', 0):.0f}/100"
+    )
+
+    print(
+        f"🎣 Hook Score: "
+        f"{selected_topic.get('hook_score', 0):.0f}/100"
+    )
+
+    print(
+        f"❓ Curiosity Score: "
+        f"{selected_topic.get('curiosity_score', 0):.0f}/100"
+    )
+
+    print(
+        f"🌎 Global Score: "
+        f"{selected_topic.get('global_score', 0):.0f}/100"
+    )
+
+    print(
+        f"📖 Story Score: "
+        f"{selected_topic.get('story_score', 0):.0f}/100"
+    )
+
+    print(
+        f"🎬 Visual Score: "
+        f"{selected_topic.get('visual_score', 0):.0f}/100"
+    )
+
+    print(
+        f"💡 Reason: "
+        f"{selected_topic.get('reason', '')}"
+    )
+
+    print()
+
+    print(
+        "🎣 Suggested Hook:"
+    )
+
+    print(
+        f"   {selected_topic.get('suggested_hook', '')}"
+    )
+
+    print()
+
+    # =====================================================
+    # FINAL STATUS
+    # =====================================================
+
     print("================================")
     print("✅ Global trend pipeline completed")
     print("================================")
     print()
 
     print(
-        f"🎯 Final topics: "
+        f"📊 Analyzed trends: "
+        f"{len(analyzed_trends)}"
+    )
+
+    print(
+        f"🤖 AI Judge candidates: "
+        f"{len(topics)}"
+    )
+
+    print(
+        f"🔥 Approved topics: "
         f"{len(approved_trends)}"
     )
 
+    print(
+        f"🏆 Selected topic: "
+        f"{selected_topic.get('topic', '')}"
+    )
+
     print()
+
+    # =====================================================
+    # TARGET STATUS
+    # =====================================================
 
     if len(approved_trends) < TARGET_TOPICS:
 
