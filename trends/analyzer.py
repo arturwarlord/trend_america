@@ -3,6 +3,10 @@ import os
 import re
 from difflib import SequenceMatcher
 
+from trends.content_filter import (
+    calculate_relevance,
+    is_relevant
+)
 
 INPUT_FILE = "data/trend_candidates.json"
 OUTPUT_FILE = "data/top_trends.json"
