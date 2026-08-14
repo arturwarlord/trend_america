@@ -2,7 +2,7 @@ import json
 import os
 
 
-DATA_FILE = (
+FILE_PATH = (
     "data/trend_candidates.json"
 )
 
@@ -15,7 +15,7 @@ def save_trends(trends):
     )
 
     with open(
-        DATA_FILE,
+        FILE_PATH,
         "w",
         encoding="utf-8"
     ) as file:
@@ -27,7 +27,7 @@ def save_trends(trends):
             indent=2
         )
 
+    print()
     print(
-        f"💾 Тренды сохранены: "
-        f"{DATA_FILE}"
+        f"💾 Saved: {FILE_PATH}"
     )
