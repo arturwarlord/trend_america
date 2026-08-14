@@ -2,15 +2,14 @@ import os
 import requests
 
 
-YOUTUBE_API_URL = (
-    "https://www.googleapis.com/youtube/v3/videos"
-)
-
-
 def get_youtube_trends(
-    region: str = "US",
-    limit: int = 20
+    region="US",
+    limit=20
 ):
+
+    print(
+        f"📺 YouTube Trends: {region}"
+    )
 
     api_key = os.getenv(
         "YOUTUBE_API_KEY"
@@ -19,36 +18,47 @@ def get_youtube_trends(
     if not api_key:
 
         print(
-            "⚠️ YOUTUBE_API_KEY не найден"
+            "❌ YOUTUBE_API_KEY is missing"
         )
 
         return []
 
-    print(
-        f"📺 Получаем YouTube Trends: {region}"
+    url = (
+        "https://www.googleapis.com/"
+        "youtube/v3/videos"
     )
 
     params = {
-        "part": "snippet,statistics",
-        "chart": "mostPopular",
-        "regionCode": region,
-        "maxResults": limit,
-        "key": api_key
+
+        "part":
+            "snippet,statistics",
+
+        "chart":
+            "mostPopular",
+
+        "regionCode":
+            region,
+
+        "maxResults":
+            limit,
+
+        "key":
+            api_key
     }
 
     try:
 
         response = requests.get(
-            YOUTUBE_API_URL,
+            url,
             params=params,
-            timeout=15
+            timeout=20
         )
 
         response.raise_for_status()
 
         data = response.json()
 
-        trends = []
+        results = []
 
         for video in data.get(
             "items",
@@ -65,41 +75,43 @@ def get_youtube_trends(
                 {}
             )
 
-            title = snippet.get(
-                "title"
-            )
+            results.append({
 
-            if not title:
-                continue
+                "source":
+                    "youtube",
 
-            trends.append(
-                {
-                    "source": "youtube",
-                    "title": title,
-                    "video_id": video.get(
+                "title":
+                    snippet.get(
+                        "title",
+                        ""
+                    ),
+
+                "video_id":
+                    video.get(
                         "id"
                     ),
-                    "views": int(
+
+                "views":
+                    int(
                         statistics.get(
                             "viewCount",
                             0
                         )
                     )
-                }
-            )
+
+            })
 
         print(
-            f"✅ YouTube Trends: "
-            f"{len(trends)} видео"
+            f"✅ YouTube: "
+            f"{len(results)} trends"
         )
 
-        return trends
+        return results
 
     except Exception as error:
 
         print(
-            f"❌ YouTube Trends error: "
-            f"{error}"
+            f"❌ YouTube error: {error}"
         )
 
         return []
