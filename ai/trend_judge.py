@@ -21,7 +21,6 @@ client = genai.Client(
     api_key=API_KEY
 )
 
-
 MODEL_NAME = "gemini-3.5-flash-lite"
 
 
@@ -31,7 +30,7 @@ MODEL_NAME = "gemini-3.5-flash-lite"
 
 BATCH_SIZE = 10
 
-# Минимальный итоговый score для допуска
+# Минимальный score
 MIN_SCORE = 60
 
 # Минимальные требования
@@ -47,173 +46,376 @@ MIN_STORY_POTENTIAL = 5
 SYSTEM_PROMPT = """
 You are an expert global YouTube Shorts trend analyst.
 
-We are building ORIGINAL English YouTube Shorts for a global audience.
-
-Your task is to evaluate trending topics.
+Your job is to evaluate whether a TRENDING TOPIC can be
+turned into an ORIGINAL English YouTube Short for a global audience.
 
 IMPORTANT:
 
-You must judge ONLY what is actually supported by the topic text.
+The input is usually a SHORT TREND TITLE extracted from
+Google Trends or YouTube Trends.
 
-DO NOT invent:
-- events
-- facts
-- people
-- dates
-- locations
-- statistics
-- announcements
-- product launches
-- news
+Therefore, do NOT require the entire story to be written
+inside the title.
 
-If a topic is vague, generic, or only a keyword,
-give it LOW specificity and LOW story potential.
+You must evaluate the topic based on what the title
+reasonably indicates.
+
+However, you MUST NOT invent a specific fact that is not
+reasonably suggested by the topic.
+
+The next stage of the pipeline may research the topic
+before writing the final Short.
 
 ==================================================
-GOOD TOPICS
+CORE OBJECTIVE
+==================================================
+
+We are NOT trying to reproduce the original trending video.
+
+We are trying to identify a trend that can lead to an
+original informational, educational, explanatory or
+story-based English Short.
+
+A good trend can be:
+
+- a current technology development
+- an AI development
+- a scientific discovery
+- a space event
+- an unusual real-world event
+- a business development
+- an important historical story
+- a psychological phenomenon
+- an unusual invention
+- a strange place
+- a factual mystery
+- a major world event
+- a surprising human behavior
+- a technology/product development with a clear angle
+
+==================================================
+VERY IMPORTANT:
+TREND TITLE VS FINAL STORY
+==================================================
+
+Do NOT reject a topic ONLY because the title is short.
+
+Examples:
+
+"Google Pixel"
+
+This is potentially useful because it is a major
+technology/product trend.
+
+But it should receive LOWER specificity because
+the exact story is not known yet.
+
+"Google Pixel satellite messaging"
+
+This is stronger because the angle is clearer.
+
+"Ticketmaster"
+
+This is potentially useful as a business trend,
+but the exact story is unknown.
+
+Therefore:
+
+- global_interest can be high
+- viral_potential can be high
+- story_potential can be moderate
+- specificity can be moderate or low
+- factual_confidence can be moderate
+
+Do NOT invent a pricing change or other event.
+
+==================================================
+GOOD TOPIC TYPES
 ==================================================
 
 Prefer:
 
-- artificial intelligence
-- technology
-- science
-- space
-- discoveries
-- psychology
-- human behavior
-- engineering
-- inventions
-- business stories
-- economic stories
-- historical events
-- unusual real-world events
-- major world events
-- strange places
-- factual mysteries
-- future technology
+technology
+AI
+science
+space
+discoveries
+psychology
+human behavior
+engineering
+inventions
+business
+economics
+history
+future technology
+unusual real-world events
+major world events
+factual mysteries
+strange places
 
 ==================================================
-BAD TOPICS
+BAD TOPIC TYPES
 ==================================================
 
-Reject:
+Strongly reject:
 
 - gaming
 - video games
-- esports
 - gameplay
+- Minecraft
+- Roblox
+- Fortnite
+- GTA
+- Brawl Stars
+- esports
 - gaming tournaments
+
 - music videos
 - songs
 - albums
+- lyric videos
+- dance practice
 - dance videos
+- music battles
+
 - movie trailers
-- TV shows
+- TV trailers
 - anime
+- fictional characters
+- fictional stories
+
 - celebrity gossip
+- fan content
+- reaction videos
+- livestreams
+
 - sports matches
 - sports highlights
-- livestreams
-- reaction videos
-- fan content
-- fictional characters
-- memes without a factual story
-- generic product searches
-- generic company searches
-- random people's names
-- vague search queries
+- sports tournaments
+
+- memes with no factual story
 
 ==================================================
-IMPORTANT DISTINCTION
+SPORTS EXCEPTION
 ==================================================
 
-A popular topic is NOT automatically a good Shorts topic.
+A random athlete name is NOT a good topic.
 
-For example:
+However, a major REAL-WORLD sports story can sometimes
+be useful if the title clearly indicates a factual event
+such as:
 
-"google pixel"
+"athlete breaks world record"
+
+"historic Olympic controversy"
+
+"football club financial scandal"
+
+Do not approve simple match titles such as:
+
+"T1 vs DK"
+
+"Real Madrid vs Barcelona"
+
+==================================================
+MUSIC EXCEPTION
+==================================================
+
+Music-related topics should normally be rejected.
+
+Do not approve:
+
+"Artist - Song"
+
+"Official Music Video"
+
+"Dance Practice"
+
+"Lyric Video"
+
+However, a genuine real-world story ABOUT the music industry
+could potentially be useful if the title clearly indicates
+the story.
+
+Example:
+
+"Spotify changes royalty system"
+
+Potentially GOOD.
+
+But:
+
+"Spotify"
+
+is only a company keyword and should have lower specificity.
+
+==================================================
+MOVIE / ENTERTAINMENT EXCEPTION
+==================================================
+
+Movie trailers, anime and fictional characters should be rejected.
+
+However, a real-world industry story can be useful.
+
+Example:
+
+"Hollywood actors strike"
+
+Potentially GOOD.
+
+But:
+
+"Avengers Doomday trailer"
 
 BAD.
-
-It is only a generic product/search term.
-
-"Google Pixel introduces satellite messaging"
-
-GOOD.
-
-It describes a specific technological development.
-
-Another example:
-
-"ticketmaster"
-
-BAD.
-
-It is only a company name.
-
-"Ticketmaster changes its ticket pricing system"
-
-Potentially GOOD because it describes a specific business development.
-
-But if the supplied topic is only:
-
-"ticketmaster"
-
-DO NOT invent the pricing story.
 
 ==================================================
 GLOBAL AUDIENCE
 ==================================================
 
-Prefer topics understandable to an English-speaking global audience.
+The final Short will be in English.
 
-Avoid topics requiring knowledge of:
+Prefer topics that can interest people across multiple countries.
 
-- a specific local influencer
-- a local TV show
-- a local game
-- a local music artist
+High-value signals:
+
+- technology
+- AI
+- science
+- space
+- money
+- business
+- human psychology
+- surprising discoveries
+- major global events
+
+Lower-value signals:
+
+- local influencers
+- local TV personalities
 - local fandom
-- local language
-- local sports culture
+- local-language entertainment
+- obscure local events
 
 ==================================================
-ORIGINAL SHORT POTENTIAL
+STORY POTENTIAL
 ==================================================
 
-A good topic should naturally allow:
+Ask:
+
+Can this trend lead to a Short with:
 
 HOOK
-→ surprising fact
+→ surprising information
 → explanation
 → escalation
 → payoff
 
-The viewer should naturally ask:
+Good story potential means that there is a plausible
+question behind the trend:
 
-Why?
-How?
+Why is this trending?
+
 What happened?
-What does this mean?
+
+Why does it matter?
+
+How does it work?
+
+What changed?
+
+What surprising fact is connected to it?
+
+==================================================
+IMPORTANT:
+DO NOT INVENT FACTS
+==================================================
+
+You are evaluating the TREND, not writing the final story.
+
+You may recognize that a topic has strong potential
+without inventing the exact event.
+
+For example:
+
+"Google Pixel"
+
+Do NOT say:
+
+"Google Pixel launched satellite messaging."
+
+unless that is actually present in the topic.
+
+Instead:
+
+"Major technology/product trend with strong global
+interest, but the exact current story angle requires research."
 
 ==================================================
 SCORING
 ==================================================
 
-Give every category a number from 0 to 10.
+Give each value from 0 to 10.
 
 global_interest
+How interesting is this to a global audience?
+
 viral_potential
+How likely is the topic to attract curiosity and views?
+
 english_audience
+How suitable is it for an English-speaking global audience?
+
 story_potential
+Can this trend reasonably lead to an interesting factual story?
+
 specificity
+How clearly does the trend indicate a usable topic?
+
 factual_confidence
+How confident are you that the topic represents a real-world
+subject that can be researched without inventing facts?
+
 originality
+Can we create an original informational Short rather than
+copying the source content?
 
-Do NOT calculate "score".
+==================================================
+SCORING GUIDELINES
+==================================================
 
-The program will calculate score itself.
+Do NOT make every score low just because the title is short.
+
+A short trend can still have:
+
+global_interest: 8
+viral_potential: 8
+english_audience: 9
+story_potential: 7
+specificity: 5
+factual_confidence: 7
+originality: 8
+
+That is a potentially useful trend.
+
+Generic entertainment should still score low.
+
+Example:
+
+"google pixel"
+
+Possible:
+
+global_interest: 8
+viral_potential: 7
+english_audience: 9
+story_potential: 6
+specificity: 4
+factual_confidence: 8
+originality: 7
+
+It may still be rejected by the hard specificity rule,
+but it should NOT receive score 3/100.
 
 ==================================================
 CATEGORY
@@ -239,20 +441,24 @@ other
 DECISION
 ==================================================
 
-Set is_good_for_shorts to TRUE only if:
+Set is_good_for_shorts to TRUE when the topic has a realistic
+path toward an original informational Short.
 
-- topic is suitable for global English audience
-- topic contains a potentially factual story
-- topic is sufficiently specific
-- topic can become an original Short
-- topic is not gaming/music/movie/celebrity/sports/etc.
-- factual confidence is reasonably high
+Do NOT require the exact final story to already be visible
+in the title.
 
-If topic is only a generic keyword:
-FALSE.
+But reject clearly unsuitable content:
 
-If topic is interesting but vague:
-FALSE.
+gaming
+music
+movie trailers
+anime
+fiction
+sports matches
+livestreams
+random names
+vague entertainment
+fan content
 
 ==================================================
 OUTPUT
@@ -262,27 +468,37 @@ Return ONLY valid JSON.
 
 Return an array.
 
+The array MUST contain exactly one object per input topic.
+
 Do not use markdown.
 
 Do not use ```.
 
-Example:
+Do not add explanations outside JSON.
 
-[
-  {
-    "topic": "example",
+Each object must contain:
+
+{
+    "topic": "original topic",
     "is_good_for_shorts": true,
     "category": "technology",
+
     "global_interest": 8,
     "viral_potential": 8,
     "english_audience": 9,
-    "story_potential": 8,
-    "specificity": 9,
+    "story_potential": 7,
+    "specificity": 6,
     "factual_confidence": 8,
     "originality": 8,
-    "reason": "Specific technology development with clear story potential."
-  }
-]
+
+    "reason": "Short explanation."
+}
+
+Remember:
+
+The topic itself must NOT be rewritten.
+
+Preserve the original topic exactly.
 """
 
 
@@ -319,10 +535,8 @@ def clean_json(text):
 
     text = text.strip()
 
-    # Sometimes Gemini adds text before JSON.
-    # Try to extract array.
+    # Extract JSON array if Gemini added text
     start = text.find("[")
-
     end = text.rfind("]")
 
     if start != -1 and end != -1:
@@ -335,11 +549,16 @@ def clean_json(text):
 # FAILED RESULT
 # =========================================================
 
-def failed_result(topic, reason="AI Judge failed"):
+def failed_result(
+    topic,
+    reason="AI Judge failed"
+):
 
     return {
         "topic": topic,
+
         "is_good_for_shorts": False,
+
         "category": "other",
 
         "global_interest": 0,
@@ -386,42 +605,53 @@ def normalize_number(value):
 def calculate_score(result):
 
     global_interest = normalize_number(
-        result.get("global_interest", 0)
+        result.get(
+            "global_interest",
+            0
+        )
     )
 
     viral_potential = normalize_number(
-        result.get("viral_potential", 0)
+        result.get(
+            "viral_potential",
+            0
+        )
     )
 
     english_audience = normalize_number(
-        result.get("english_audience", 0)
+        result.get(
+            "english_audience",
+            0
+        )
     )
 
     story_potential = normalize_number(
-        result.get("story_potential", 0)
+        result.get(
+            "story_potential",
+            0
+        )
     )
 
     specificity = normalize_number(
-        result.get("specificity", 0)
+        result.get(
+            "specificity",
+            0
+        )
     )
 
     factual_confidence = normalize_number(
-        result.get("factual_confidence", 0)
+        result.get(
+            "factual_confidence",
+            0
+        )
     )
 
     originality = normalize_number(
-        result.get("originality", 0)
+        result.get(
+            "originality",
+            0
+        )
     )
-
-    # =====================================================
-    # WEIGHTED SCORE
-    #
-    # Everything is 0-10.
-    #
-    # Weighted average is therefore 0-10.
-    #
-    # Multiply by 10 => 0-100.
-    # =====================================================
 
     score = (
 
@@ -453,22 +683,32 @@ def calculate_score(result):
 
     ) * 10
 
-    return round(score, 2)
+    return round(
+        score,
+        2
+    )
 
 
 # =========================================================
 # VALIDATE RESULT
 # =========================================================
 
-def validate_result(result, original_topic):
+def validate_result(
+    result,
+    original_topic
+):
 
-    if not isinstance(result, dict):
+    if not isinstance(
+        result,
+        dict
+    ):
 
         return failed_result(
             original_topic,
             "Invalid AI result"
         )
 
+    # Always preserve original topic
     result["topic"] = original_topic
 
     numeric_fields = [
@@ -486,11 +726,14 @@ def validate_result(result, original_topic):
     for field in numeric_fields:
 
         result[field] = normalize_number(
-            result.get(field, 0)
+            result.get(
+                field,
+                0
+            )
         )
 
     # =====================================================
-    # CALCULATE SCORE OURSELVES
+    # CALCULATE SCORE
     # =====================================================
 
     result["score"] = calculate_score(
@@ -503,23 +746,44 @@ def validate_result(result, original_topic):
 
     approved = True
 
-    if result["specificity"] < MIN_SPECIFICITY:
-        approved = False
-
-    if result["factual_confidence"] < MIN_FACTUAL_CONFIDENCE:
-        approved = False
-
-    if result["story_potential"] < MIN_STORY_POTENTIAL:
-        approved = False
-
-    if result["score"] < MIN_SCORE:
-        approved = False
-
-    if not result.get(
-        "is_good_for_shorts",
-        False
+    # Specificity
+    if (
+        result["specificity"]
+        < MIN_SPECIFICITY
     ):
+
         approved = False
+
+    # Facts
+    if (
+        result["factual_confidence"]
+        < MIN_FACTUAL_CONFIDENCE
+    ):
+
+        approved = False
+
+    # Story
+    if (
+        result["story_potential"]
+        < MIN_STORY_POTENTIAL
+    ):
+
+        approved = False
+
+    # Final score
+    if (
+        result["score"]
+        < MIN_SCORE
+    ):
+
+        approved = False
+
+    # =====================================================
+    # DO NOT TRUST GEMINI BOOLEAN
+    # =====================================================
+    #
+    # The final decision is controlled by our program.
+    #
 
     result["is_good_for_shorts"] = approved
 
@@ -530,7 +794,11 @@ def validate_result(result, original_topic):
 # GEMINI BATCH
 # =========================================================
 
-def judge_batch(topics, batch_number, total_batches):
+def judge_batch(
+    topics,
+    batch_number,
+    total_batches
+):
 
     print(
         f"🚀 Gemini batch request "
@@ -541,7 +809,8 @@ def judge_batch(topics, batch_number, total_batches):
 
         f"{index + 1}. {topic}"
 
-        for index, topic in enumerate(topics)
+        for index, topic
+        in enumerate(topics)
 
     )
 
@@ -554,11 +823,21 @@ TOPICS:
 
 {topics_text}
 
-Return exactly one JSON object for every topic.
+IMPORTANT:
 
-The returned array MUST contain exactly {len(topics)} objects.
+There are exactly {len(topics)} topics.
 
-Preserve the original topic text exactly.
+Return exactly {len(topics)} JSON objects.
+
+The order MUST be identical to the input order.
+
+Do not remove any topic.
+
+Do not merge topics.
+
+Do not rewrite topics.
+
+Preserve every original topic exactly.
 """
 
     try:
@@ -577,12 +856,14 @@ Preserve the original topic text exactly.
             )
 
             return [
+
                 failed_result(
                     topic,
                     "Empty Gemini response"
                 )
 
                 for topic in topics
+
             ]
 
         text = clean_json(
@@ -604,7 +885,9 @@ Preserve the original topic text exactly.
 
         results = []
 
-        for index, topic in enumerate(topics):
+        for index, topic in enumerate(
+            topics
+        ):
 
             if index < len(data):
 
@@ -630,16 +913,13 @@ Preserve the original topic text exactly.
 
     except Exception as error:
 
-        error_text = str(error)
-
         print()
         print(
-            f"⚠️ Gemini batch error:"
+            "⚠️ Gemini batch error:"
         )
         print(
-            error_text
+            str(error)
         )
-
         print()
 
         return [
@@ -662,7 +942,7 @@ def judge_topics(topics):
 
     print()
     print("================================")
-    print("🤖 AI TREND JUDGE V5")
+    print("🤖 AI TREND JUDGE V6")
     print("================================")
 
     if not topics:
@@ -688,7 +968,9 @@ def judge_topics(topics):
 
     batches = [
 
-        topics[index:index + BATCH_SIZE]
+        topics[
+            index:index + BATCH_SIZE
+        ]
 
         for index in range(
             0,
@@ -703,7 +985,7 @@ def judge_topics(topics):
     )
 
     # =====================================================
-    # PROCESS
+    # PROCESS BATCHES
     # =====================================================
 
     for batch_index, batch in enumerate(
@@ -722,7 +1004,7 @@ def judge_topics(topics):
         )
 
         # =================================================
-        # SMALL DELAY BETWEEN REQUESTS
+        # DELAY
         # =================================================
 
         if batch_index < total_batches:
@@ -736,12 +1018,15 @@ def judge_topics(topics):
     # =====================================================
 
     results.sort(
+
         key=lambda item:
             item.get(
                 "score",
                 0
             ),
+
         reverse=True
+
     )
 
     # =====================================================
@@ -767,12 +1052,19 @@ def judge_topics(topics):
         )
 
         if approved:
+
             approved_count += 1
 
         status = (
+
             "✅ APPROVED"
+
             if approved
-            else "❌ REJECTED"
+
+            else
+
+            "❌ REJECTED"
+
         )
 
         print(
