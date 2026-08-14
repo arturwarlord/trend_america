@@ -11,10 +11,8 @@ from trends.content_filter import (
 
 INPUT_FILE = "data/trend_candidates.json"
 
-# TOP 30 после математического анализа
 ANALYZED_FILE = "data/analyzed_trends.json"
 
-# Финальный файл для AI-approved трендов
 OUTPUT_FILE = "data/top_trends.json"
 
 
@@ -45,7 +43,81 @@ STOP_WORDS = {
 
 
 # ==========================================
-# TEXT NORMALIZATION
+# HARD EXCLUDE
+# ==========================================
+
+HARD_EXCLUDE_PATTERNS = [
+
+    # MUSIC
+    r"\bofficial music video\b",
+    r"\bmusic video\b",
+    r"\bofficial video\b",
+    r"\blyric video\b",
+    r"\bofficial lyric\b",
+    r"\bdance practice\b",
+    r"\bofficial audio\b",
+    r"\bmv\b",
+    r"\bnew song\b",
+    r"\blatest song\b",
+    r"\bhit song\b",
+    r"\balbum\b",
+
+    # GAMING
+    r"\bminecraft\b",
+    r"\broblox\b",
+    r"\bfortnite\b",
+    r"\bgta 5\b",
+    r"\bgta 6\b",
+    r"\bcall of duty\b",
+    r"\bblack ops\b",
+    r"\bwarhammer\b",
+    r"\bbrawl stars\b",
+    r"\brainbow six\b",
+    r"\bplaystation\b",
+    r"\bxbox\b",
+    r"\besports\b",
+    r"\bgameplay\b",
+    r"\bgame trailer\b",
+
+    # SPORTS
+    r"\bvs\b",
+    r"\bmatch\b",
+    r"\bhighlights\b",
+    r"\bfootball\b",
+    r"\bsoccer\b",
+    r"\bbasketball\b",
+    r"\btennis\b",
+    r"\bbaseball\b",
+    r"\bcricket\b",
+    r"\blck\b",
+    r"\bnba\b",
+    r"\bnfl\b",
+    r"\bfifa\b",
+
+    # MOVIES / TV
+    r"\bofficial trailer\b",
+    r"\btrailer\b",
+    r"\bteaser\b",
+    r"\bseason \d+\b",
+    r"\bepisode\b",
+    r"\bnetflix\b",
+    r"\bmarvel\b",
+    r"\bdisney\b",
+    r"\banime\b",
+
+    # DANCE
+    r"\bdance\b",
+    r"\bchoreography\b",
+
+    # LIVE
+    r"🔴\s*live",
+    r"\blive stream\b",
+
+]
+
+
+# ==========================================
+# NORMALIZE
 # ==========================================
 
 def normalize_title(title):
@@ -77,9 +149,7 @@ def normalize_title(title):
 
 def get_keywords(title):
 
-    normalized = normalize_title(
-        title
-    )
+    normalized = normalize_title(title)
 
     words = normalized.split()
 
@@ -100,13 +170,9 @@ def similarity(
     title_b
 ):
 
-    keywords_a = get_keywords(
-        title_a
-    )
+    keywords_a = get_keywords(title_a)
 
-    keywords_b = get_keywords(
-        title_b
-    )
+    keywords_b = get_keywords(title_b)
 
     if not keywords_a or not keywords_b:
         return 0
@@ -142,7 +208,31 @@ def similarity(
 
 
 # ==========================================
-# FIND EXISTING GROUP
+# HARD FILTER
+# ==========================================
+
+def hard_filter_topic(title):
+
+    if not title:
+        return False
+
+    text = str(title).lower()
+
+    for pattern in HARD_EXCLUDE_PATTERNS:
+
+        if re.search(
+            pattern,
+            text,
+            flags=re.IGNORECASE
+        ):
+
+            return False
+
+    return True
+
+
+# ==========================================
+# FIND GROUP
 # ==========================================
 
 def find_group(
@@ -165,7 +255,7 @@ def find_group(
 
 
 # ==========================================
-# CREATE TOPIC GROUPS
+# CREATE GROUPS
 # ==========================================
 
 def create_groups(
@@ -242,7 +332,7 @@ def calculate_score(
     total_views = 0
 
     # ======================================
-    # COLLECT METRICS
+    # METRICS
     # ======================================
 
     for item in items:
@@ -293,7 +383,7 @@ def calculate_score(
                 pass
 
     # ======================================
-    # COUNTRY SCORE
+    # GLOBAL METRICS
     # ======================================
 
     country_score = min(
@@ -301,27 +391,15 @@ def calculate_score(
         1
     )
 
-    # ======================================
-    # GOOGLE SCORE
-    # ======================================
-
     google_score = min(
         google_count / 10,
         1
     )
 
-    # ======================================
-    # YOUTUBE SCORE
-    # ======================================
-
     youtube_score = min(
         youtube_count / 10,
         1
     )
-
-    # ======================================
-    # VIEWS SCORE
-    # ======================================
 
     if total_views <= 0:
 
@@ -337,10 +415,6 @@ def calculate_score(
             ) ** 0.5,
             1
         )
-
-    # ======================================
-    # GLOBAL SCORE
-    # ======================================
 
     global_score = (
 
@@ -361,7 +435,7 @@ def calculate_score(
     )
 
     # ======================================
-    # CONTENT RELEVANCE
+    # RELEVANCE
     # ======================================
 
     relevance_score = calculate_relevance(
@@ -370,15 +444,17 @@ def calculate_score(
 
     # ======================================
     # FINAL SCORE
+    #
+    # QUALITY > POPULARITY
     # ======================================
 
     final_score = (
 
-        global_score * 0.60
+        relevance_score * 0.60
 
         +
 
-        relevance_score * 0.40
+        global_score * 0.40
 
     )
 
@@ -445,7 +521,7 @@ def calculate_score(
 
 
 # ==========================================
-# ANALYZE TRENDS
+# ANALYZE
 # ==========================================
 
 def analyze_trends(
@@ -454,7 +530,7 @@ def analyze_trends(
 
     print()
     print("================================")
-    print("🧠 TREND ANALYZER")
+    print("🧠 TREND ANALYZER V2")
     print("================================")
     print()
 
@@ -474,13 +550,13 @@ def analyze_trends(
         f"{len(trends)}"
     )
 
-    # ======================================
-    # FILTER BEFORE GROUPING
-    # ======================================
-
     relevant_trends = []
 
     filtered_count = 0
+
+    # ======================================
+    # FILTER
+    # ======================================
 
     for trend in trends:
 
@@ -498,15 +574,20 @@ def analyze_trends(
         if not topic:
             continue
 
-        if is_relevant(
-            topic
-        ):
+        # HARD FILTER
+        if not hard_filter_topic(topic):
 
-            relevant_trends.append(
-                trend
+            filtered_count += 1
+
+            print(
+                f"🚫 Hard filtered: "
+                f"{topic}"
             )
 
-        else:
+            continue
+
+        # CONTENT FILTER
+        if not is_relevant(topic):
 
             filtered_count += 1
 
@@ -514,6 +595,12 @@ def analyze_trends(
                 f"🚫 Filtered: "
                 f"{topic}"
             )
+
+            continue
+
+        relevant_trends.append(
+            trend
+        )
 
     print()
     print(
@@ -527,7 +614,7 @@ def analyze_trends(
     )
 
     # ======================================
-    # GROUP SIMILAR TOPICS
+    # GROUP
     # ======================================
 
     groups = create_groups(
@@ -540,7 +627,7 @@ def analyze_trends(
     )
 
     # ======================================
-    # CALCULATE SCORES
+    # SCORE
     # ======================================
 
     analyzed = []
@@ -551,12 +638,23 @@ def analyze_trends(
             group
         )
 
+        # Don't send weak topics to AI
+        if result["relevance_score"] < 45:
+
+            print(
+                f"🚫 Low relevance: "
+                f"{result['topic']} "
+                f"({result['relevance_score']}/100)"
+            )
+
+            continue
+
         analyzed.append(
             result
         )
 
     # ======================================
-    # SORT BY FINAL SCORE
+    # SORT
     # ======================================
 
     analyzed.sort(
@@ -566,14 +664,14 @@ def analyze_trends(
     )
 
     # ======================================
-    # TOP 30
+    # TOP 40
     # ======================================
 
-    top_trends = analyzed[:30]
+    top_trends = analyzed[:40]
 
     print()
     print("================================")
-    print("🔥 TOP 30 GLOBAL TRENDS")
+    print("🔥 TOP 40 GLOBAL CANDIDATES")
     print("================================")
     print()
 
@@ -588,12 +686,12 @@ def analyze_trends(
         )
 
         print(
-            f"   Final Score: "
+            f"   Final: "
             f"{trend['final_score']}/100"
         )
 
         print(
-            f"   Global Score: "
+            f"   Global: "
             f"{trend['global_score']}/100"
         )
 
@@ -608,16 +706,6 @@ def analyze_trends(
         )
 
         print(
-            f"   Google: "
-            f"{trend['google_count']}"
-        )
-
-        print(
-            f"   YouTube: "
-            f"{trend['youtube_count']}"
-        )
-
-        print(
             f"   Views: "
             f"{trend['total_views']:,}"
         )
@@ -628,7 +716,7 @@ def analyze_trends(
 
 
 # ==========================================
-# SAVE ANALYZED TOP 30
+# SAVE ANALYZED
 # ==========================================
 
 def save_analyzed_trends(
@@ -653,14 +741,13 @@ def save_analyzed_trends(
             indent=2
         )
 
-    print()
     print(
         f"💾 Saved: {ANALYZED_FILE}"
     )
 
 
 # ==========================================
-# SAVE AI APPROVED TRENDS
+# SAVE AI RESULTS
 # ==========================================
 
 def save_top_trends(
@@ -685,7 +772,6 @@ def save_top_trends(
             indent=2
         )
 
-    print()
     print(
         f"💾 Saved: {OUTPUT_FILE}"
     )
