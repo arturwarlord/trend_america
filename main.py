@@ -1,12 +1,9 @@
 from trends.collector import collect_trends
 
-from trends.storage import (
-    save_trends
-)
+from trends.storage import save_trends
 
 from trends.analyzer import (
     analyze_trends,
-    save_analyzed_trends,
     save_top_trends
 )
 
@@ -15,48 +12,25 @@ from ai.trend_judge import (
 )
 
 
-# ==========================================
-# CONFIG
-# ==========================================
-
-MAX_AI_TOPICS = 30
-
-MIN_AI_SCORE = 60
-
-FINAL_TOPICS = 5
-
-
-# ==========================================
-# MAIN
-# ==========================================
-
 def main():
 
     print()
     print("🚀 YouTube Global Shorts")
     print()
 
-    # ======================================
-    # COLLECT GLOBAL TRENDS
-    # ======================================
+    # ==========================================
+    # COLLECT
+    # ==========================================
 
     trends = collect_trends()
-
-    if not trends:
-
-        print()
-        print("❌ No trends collected")
-        print()
-
-        return
 
     save_trends(
         trends
     )
 
-    # ======================================
-    # MATHEMATICAL ANALYSIS
-    # ======================================
+    # ==========================================
+    # ANALYZE
+    # ==========================================
 
     analyzed_trends = analyze_trends(
         trends
@@ -64,25 +38,17 @@ def main():
 
     if not analyzed_trends:
 
-        print()
-        print("❌ No analyzed trends")
-        print()
+        print(
+            "❌ No analyzed trends found"
+        )
 
         save_top_trends([])
 
         return
 
-    # ======================================
-    # SAVE TOP 30
-    # ======================================
-
-    save_analyzed_trends(
-        analyzed_trends
-    )
-
-    # ======================================
-    # PREPARE AI JUDGE
-    # ======================================
+    # ==========================================
+    # AI TREND JUDGE
+    # ==========================================
 
     print()
     print("================================")
@@ -90,67 +56,46 @@ def main():
     print("================================")
     print()
 
-    # --------------------------------------
-    # LIMIT TOPICS FOR GEMINI
-    # --------------------------------------
-
-    ai_candidates = analyzed_trends[
-        :MAX_AI_TOPICS
-    ]
+    # ==========================================
+    # TOP 30 CANDIDATES
+    # ==========================================
 
     topics = [
 
-        trend.get(
-            "topic",
-            ""
-        )
+        trend["topic"]
 
-        for trend in ai_candidates
+        for trend in analyzed_trends[:30]
 
-        if trend.get(
-            "topic",
-            ""
-        )
+        if trend.get("topic")
+
     ]
+
+    print(
+        f"📥 Original topics: "
+        f"{len(topics)}"
+    )
 
     if not topics:
 
-        print()
-        print("❌ No topics for AI Judge")
-        print()
+        print(
+            "❌ No trend candidates found"
+        )
 
         save_top_trends([])
 
         return
 
-    print(
-        f"📊 Topics for AI Judge: "
-        f"{len(topics)}"
-    )
-
-    print()
-
-    # ======================================
-    # AI JUDGE
-    # ======================================
+    # ==========================================
+    # ONE BATCH GEMINI REQUEST
+    # ==========================================
 
     judged_trends = judge_topics(
         topics
     )
 
-    if not judged_trends:
-
-        print()
-        print("❌ AI Judge returned no results")
-        print()
-
-        save_top_trends([])
-
-        return
-
-    # ======================================
+    # ==========================================
     # KEEP APPROVED
-    # ======================================
+    # ==========================================
 
     approved_trends = [
 
@@ -166,12 +111,13 @@ def main():
         and trend.get(
             "score",
             0
-        ) >= MIN_AI_SCORE
+        ) >= 60
+
     ]
 
-    # ======================================
+    # ==========================================
     # SORT
-    # ======================================
+    # ==========================================
 
     approved_trends.sort(
 
@@ -182,19 +128,18 @@ def main():
             ),
 
         reverse=True
+
     )
 
-    # ======================================
-    # FINAL TOP 5
-    # ======================================
+    # ==========================================
+    # TOP 5
+    # ==========================================
 
-    approved_trends = approved_trends[
-        :FINAL_TOPICS
-    ]
+    approved_trends = approved_trends[:5]
 
-    # ======================================
-    # PRINT RESULTS
-    # ======================================
+    # ==========================================
+    # DISPLAY
+    # ==========================================
 
     print()
     print("================================")
@@ -222,7 +167,7 @@ def main():
 
             print(
                 f"   AI Score: "
-                f"{trend.get('score', 0)}/100"
+                f"{trend.get('score', 0):.0f}/100"
             )
 
             print(
@@ -232,22 +177,37 @@ def main():
 
             print(
                 f"   Global Interest: "
-                f"{trend.get('global_interest', 0)}/10"
+                f"{trend.get('global_interest', 0):.0f}/10"
             )
 
             print(
                 f"   Viral Potential: "
-                f"{trend.get('viral_potential', 0)}/10"
+                f"{trend.get('viral_potential', 0):.0f}/10"
             )
 
             print(
                 f"   English Audience: "
-                f"{trend.get('english_audience', 0)}/10"
+                f"{trend.get('english_audience', 0):.0f}/10"
             )
 
             print(
                 f"   Story Potential: "
-                f"{trend.get('story_potential', 0)}/10"
+                f"{trend.get('story_potential', 0):.0f}/10"
+            )
+
+            print(
+                f"   Specificity: "
+                f"{trend.get('specificity', 0):.0f}/10"
+            )
+
+            print(
+                f"   Facts: "
+                f"{trend.get('factual_confidence', 0):.0f}/10"
+            )
+
+            print(
+                f"   Originality: "
+                f"{trend.get('originality', 0):.0f}/10"
             )
 
             print(
@@ -257,22 +217,27 @@ def main():
 
             print()
 
-    # ======================================
-    # SAVE FINAL RESULTS
-    # ======================================
+    # ==========================================
+    # SAVE
+    # ==========================================
 
     save_top_trends(
         approved_trends
     )
 
-    # ======================================
-    # FINAL STATUS
-    # ======================================
-
     print()
-    print("================================")
-    print("✅ Global trend pipeline completed")
-    print("================================")
+    print(
+        "================================"
+    )
+
+    print(
+        "✅ Global trend pipeline completed"
+    )
+
+    print(
+        "================================"
+    )
+
     print()
 
     print(
@@ -282,10 +247,6 @@ def main():
 
     print()
 
-
-# ==========================================
-# ENTRY POINT
-# ==========================================
 
 if __name__ == "__main__":
 
