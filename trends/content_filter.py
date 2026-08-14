@@ -32,7 +32,6 @@ EXCLUDED_KEYWORDS = {
     "rainbow six",
     "call of duty",
     "black ops",
-    "efootball",
     "battlefield",
     "total war",
 
@@ -103,7 +102,7 @@ EXCLUDED_KEYWORDS = {
     "reality tv",
 
     # ==========================
-    # LOCAL / LANGUAGE CONTENT
+    # LOCAL / ENTERTAINMENT
     # ==========================
 
     "bollywood",
@@ -242,12 +241,12 @@ POSITIVE_KEYWORDS = {
     "future",
     "innovation",
     "invention",
-    "invention",
+
 }
 
 
 # ==========================================
-# NORMALIZE
+# NORMALIZE TEXT
 # ==========================================
 
 def normalize_text(text):
@@ -277,47 +276,77 @@ def normalize_text(text):
 # EXCLUSION CHECK
 # ==========================================
 
-def contains_excluded_keyword(
-    text
-):
+def contains_excluded_keyword(text):
 
     text = normalize_text(
         text
     )
 
+    if not text:
+        return False
+
+    words = set(
+        text.split()
+    )
+
     for keyword in EXCLUDED_KEYWORDS:
 
-        keyword = normalize_text(
+        normalized_keyword = normalize_text(
             keyword
         )
 
-        if keyword in text:
+        if not normalized_keyword:
+            continue
 
-            return True
+        # Multi-word keyword
+        if " " in normalized_keyword:
+
+            if normalized_keyword in text:
+
+                return True
+
+        # Single-word keyword
+        else:
+
+            if normalized_keyword in words:
+
+                return True
 
     return False
 
 
 # ==========================================
-# RELEVANCE
+# RELEVANCE SCORE
 # ==========================================
 
-def calculate_relevance(
-    topic
-):
+def calculate_relevance(topic):
 
     text = normalize_text(
         topic
     )
 
-    # Hard exclusion
+    if not text:
+        return 0
+
+    # ======================================
+    # HARD EXCLUSION
+    # ======================================
+
     if contains_excluded_keyword(
         text
     ):
 
         return 0
 
+    words = set(
+        text.split()
+    )
+
     matches = []
+
+    # ======================================
+    # FIND POSITIVE KEYWORDS
+    # ======================================
 
     for keyword in POSITIVE_KEYWORDS:
 
@@ -325,11 +354,32 @@ def calculate_relevance(
             keyword
         )
 
-        if normalized_keyword in text:
+        if not normalized_keyword:
+            continue
 
-            matches.append(
-                normalized_keyword
-            )
+        # ----------------------------------
+        # Multi-word keyword
+        # ----------------------------------
+
+        if " " in normalized_keyword:
+
+            if normalized_keyword in text:
+
+                matches.append(
+                    normalized_keyword
+                )
+
+        # ----------------------------------
+        # Single-word keyword
+        # ----------------------------------
+
+        else:
+
+            if normalized_keyword in words:
+
+                matches.append(
+                    normalized_keyword
+                )
 
     # ======================================
     # NO MATCH
@@ -340,31 +390,87 @@ def calculate_relevance(
         return 35
 
     # ======================================
-    # STRONG TOPIC
+    # STRONG KEYWORDS
     # ======================================
 
-    if len(matches) >= 3:
+    strong_keywords = {
+
+        "artificial intelligence",
+        "machine learning",
+        "deep learning",
+        "neural network",
+
+        "chatgpt",
+        "openai",
+        "gemini",
+        "claude",
+        "anthropic",
+
+        "nasa",
+        "spacex",
+        "black hole",
+        "asteroid",
+
+        "scientist",
+        "scientists",
+        "discovery",
+        "breakthrough",
+
+        "robotics",
+        "robot",
+
+        "quantum",
+
+        "innovation",
+        "invention",
+
+    }
+
+    strong_matches = [
+
+        match
+
+        for match in matches
+
+        if match in strong_keywords
+
+    ]
+
+    # ======================================
+    # VERY STRONG TOPIC
+    # ======================================
+
+    if len(strong_matches) >= 2:
 
         return 100
 
-    if len(matches) == 2:
+    if len(strong_matches) == 1:
 
         return 90
 
-    return 75
+    # ======================================
+    # MULTIPLE GENERAL SIGNALS
+    # ======================================
+
+    if len(matches) >= 2:
+
+        return 80
+
+    # ======================================
+    # ONE GENERAL SIGNAL
+    # ======================================
+
+    return 55
 
 
 # ==========================================
 # RELEVANCE CHECK
 # ==========================================
 
-def is_relevant(
-    topic
-):
+def is_relevant(topic):
 
     return (
         calculate_relevance(
             topic
-        )
-        > 0
+        ) > 0
     )
