@@ -18,7 +18,11 @@ from ai.trend_judge import (
 
 TARGET_TOPICS = 10
 
-AI_INPUT_LIMIT = 50
+# Сколько кандидатов отдаём AI Judge.
+#
+# Раньше здесь фактически использовалось около 60.
+# Теперь даём Judge больше материала.
+AI_INPUT_LIMIT = 120
 
 
 # =========================================================
@@ -69,25 +73,15 @@ def main():
     print("================================")
     print()
 
-    # -----------------------------------------------------
-    # Analyzer already returns TOP 50 in V8
-    # -----------------------------------------------------
+    # =====================================================
+    # REMOVE DUPLICATES
+    # =====================================================
 
-    candidates = analyzed_trends[
-        :AI_INPUT_LIMIT
-    ]
+    unique_topics = []
 
-    topics = [
+    seen_topics = set()
 
-        trend["topic"]
-    
-        for trend in analyzed_trends[:60]
-    
-        if trend.get("topic")
-    
-    ]
-
-    for trend in candidates:
+    for trend in analyzed_trends:
 
         topic = trend.get(
             "topic",
@@ -104,12 +98,44 @@ def main():
         if not topic:
             continue
 
-        topics.append(
+        # Case-insensitive deduplication
+        topic_key = topic.lower()
+
+        if topic_key in seen_topics:
+            continue
+
+        seen_topics.add(
+            topic_key
+        )
+
+        unique_topics.append(
             topic
         )
 
+    # =====================================================
+    # LIMIT AI INPUT
+    # =====================================================
+
+    topics = unique_topics[
+        :AI_INPUT_LIMIT
+    ]
+
+    # =====================================================
+    # DISPLAY
+    # =====================================================
+
     print(
-        f"📥 Original topics: "
+        f"📥 Analyzer trends: "
+        f"{len(analyzed_trends)}"
+    )
+
+    print(
+        f"🔗 Unique topics: "
+        f"{len(unique_topics)}"
+    )
+
+    print(
+        f"🧠 Topics sent to AI Judge: "
         f"{len(topics)}"
     )
 
@@ -151,29 +177,19 @@ def main():
     # =====================================================
     # KEEP AI APPROVED
     # =====================================================
-    #
-    # IMPORTANT:
-    #
-    # DO NOT check score >= 60 here.
-    #
-    # judge_topics() already calculates the score
-    # and controls is_good_for_shorts.
-    #
-    # This prevents double filtering.
-    # =====================================================
 
-    approved_trends = [
+    approved_trends = []
 
-        trend
-
-        for trend in judged_trends
+    for trend in judged_trends:
 
         if trend.get(
             "is_good_for_shorts",
             False
-        )
+        ):
 
-    ]
+            approved_trends.append(
+                trend
+            )
 
     # =====================================================
     # SORT
@@ -192,7 +208,7 @@ def main():
     )
 
     # =====================================================
-    # LIMIT
+    # LIMIT TO TARGET
     # =====================================================
 
     approved_trends = approved_trends[
@@ -318,8 +334,8 @@ def main():
         )
 
         print(
-            "💡 Consider increasing the number "
-            "of input trends."
+            "💡 AI Judge needs to evaluate "
+            "more candidates."
         )
 
     else:
