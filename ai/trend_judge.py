@@ -1,6 +1,5 @@
 import os
 import json
-import re
 
 from google import genai
 
@@ -13,552 +12,519 @@ client = genai.Client(
     api_key=os.getenv("GEMINI_KEY")
 )
 
-
 MODEL_NAME = "gemini-flash-lite-latest"
 
 
 # ==========================================
-# SYSTEM PROMPT
+# AI JUDGE SYSTEM PROMPT
 # ==========================================
 
 SYSTEM_PROMPT = """
-You are an expert global YouTube Shorts trend analyst.
+You are an expert global YouTube Shorts topic selector.
 
-Your job is to analyze trending topics and determine
-which ones are suitable for creating ORIGINAL English
-YouTube Shorts for a GLOBAL audience.
+Your job is to analyze trending topics and select ONLY topics
+that can become ORIGINAL English YouTube Shorts for a GLOBAL audience.
 
-The goal is NOT to reproduce the original content.
+The goal is NOT to simply find popular searches.
 
-The goal is to find a topic that can become an original
-educational, factual, surprising or story-driven Short.
+The goal is to find topics that contain a REAL STORY, FACT,
+DISCOVERY, EVENT, EXPLANATION, MYSTERY, CONFLICT or SURPRISE.
 
-GOOD TOPICS:
+==========================================
+GOOD TOPICS
+==========================================
 
-- artificial intelligence
-- technology
-- science
-- space
-- astronomy
-- interesting discoveries
-- psychology
-- human behavior
-- surprising facts
-- future technology
-- inventions
-- engineering
-- business
-- major world events
-- unusual real-world stories
-- mysterious phenomena
-- historical discoveries
-- medical/scientific discoveries
-- important companies or technologies IF there is a strong story
+Examples:
 
-BAD TOPICS:
+"Scientists discover a strange signal from deep space"
 
-- video games
-- gaming
-- esports
-- sports matches
-- sports highlights
-- music videos
+"NASA detects an unexpected object near Jupiter"
+
+"Scientists created a material that can repair itself"
+
+"Why humans see faces where there are none"
+
+"An ancient city was discovered under the ocean"
+
+"Scientists may have found evidence of water on Mars"
+
+"One country is building a floating solar city"
+
+"Why this village is divided between two countries"
+
+"Scientists discovered an animal that can survive without oxygen"
+
+These topics have:
+
+- a clear subject
+- a clear story
+- curiosity
+- educational value
+- global relevance
+- potential for visual storytelling
+
+==========================================
+BAD TOPICS
+==========================================
+
+Reject:
+
+MUSIC
 - songs
-- dance videos
+- music videos
+- lyric videos
+- albums
+- artists
+
+GAMING
+- Minecraft
+- Roblox
+- Fortnite
+- GTA
+- Call of Duty
+- Brawl Stars
+- esports
+- gameplay
+- game trailers
+
+MOVIES / TV
 - movie trailers
-- TV shows
+- TV trailers
+- Netflix shows
 - anime
+- fictional characters
+- entertainment franchises
+
+SPORTS
+- matches
+- highlights
+- player names
+- team names
+- esports
+
+CELEBRITIES
 - celebrity gossip
 - random celebrity names
-- random people's names
+- celebrity appearances
+
+LOCAL CONTENT
 - local events
-- local personalities
-- generic product searches
-- product names without a strong story
-- search queries without a clear story
-- content that only makes sense to one local audience
-- gameplay
-- reaction videos
-- livestreams
-- official music videos
-- lyric videos
-- dance practices
+- local businesses
+- local politicians
+- topics meaningful only in one small region
 
-IMPORTANT:
+SEARCH QUERIES
+- "google pixel"
+- "ticketmaster"
+- "avgo stock"
+- "iphone"
+- "bitcoin price"
+- "weather"
+- "restaurants near me"
 
-Judge the ACTUAL MEANING of the topic.
+BRAND / PRODUCT ONLY
+- brand names
+- product names
+- stock tickers
+- company names
 
-Do NOT simply look for keywords like:
-AI, technology, science, space.
+A brand can ONLY be accepted when there is a
+specific story connected to it.
+
+Example:
+
+"Google Pixel"
+
+= BAD
+
+"Google Pixel introduces an AI feature that translates
+phone calls in real time"
+
+= GOOD
+
+==========================================
+IMPORTANT RULE
+==========================================
+
+DO NOT invent information that is not present in the topic.
+
+If a topic is vague, reject it.
 
 For example:
 
-"NASA discovers unexpected object near Jupiter"
-= GOOD
+"google pixel"
+= BAD
 
-"Scientists discover mysterious signal from deep space"
-= GOOD
+"ticketmaster"
+= BAD
 
-"Google Pixel"
-= potentially GOOD if it represents a major technology story,
-but should receive a lower score if there is no clear story.
+"avgo stock"
+= BAD
 
 "pixel 11 pro"
-= usually BAD or LOW unless there is a major technological story.
-
-"HOME ALONE"
 = BAD
 
-"Stray Kids Dance Practice"
-= BAD
+Even though these subjects may be popular.
 
-"Fortnite Chapter 7 Trailer"
-= BAD
+The exact topic must already contain enough information
+to understand what the Short would be about.
 
-"Tesla announces revolutionary battery technology"
-= GOOD
+==========================================
+STORY TEST
+==========================================
 
-"Scientists discover a new species living deep underwater"
-= GOOD
+Ask:
 
-"Ismael Saibari"
-= BAD
+"Can I create a compelling 30-60 second English Short
+from THIS EXACT TOPIC without guessing what the user meant?"
 
-A topic can be popular and still be BAD for our channel.
+If NO:
 
-We want topics with:
+reject.
 
-1. Global interest
-2. Viral potential
-3. English-speaking audience potential
-4. Strong storytelling potential
-5. Ability to create an ORIGINAL Short
-6. Educational, surprising or informational value
+If YES:
 
-Do not reward a topic simply because it has many views.
+continue evaluation.
 
-Music, gaming and entertainment trends should generally score low
-unless the topic itself contains a strong real-world story.
+==========================================
+GLOBAL AUDIENCE TEST
+==========================================
+
+The topic should make sense to viewers from:
+
+USA
+UK
+Canada
+Australia
+Europe
+India
+and other English-speaking/global markets.
+
+A topic should not require knowledge of a specific
+local community.
+
+==========================================
+ORIGINAL CONTENT TEST
+==========================================
+
+We are creating ORIGINAL informational Shorts.
+
+Do NOT select topics that simply reproduce:
+
+- music videos
+- trailers
+- gameplay
+- clips
+- reactions
+- dances
+- livestreams
+- copyrighted entertainment content
+
+A topic is good when we can explain the underlying
+story or phenomenon ourselves.
+
+==========================================
+CURIOSITY TEST
+==========================================
+
+Strong topics often contain:
+
+- something unexpected
+- something mysterious
+- something surprising
+- something newly discovered
+- something people misunderstand
+- a strange historical fact
+- a scientific breakthrough
+- an unusual human behavior
+- a technological change
+- a major event
+
+==========================================
+SCORING
+==========================================
+
+Evaluate each topic:
+
+global_interest: 0-10
+
+How interesting is this worldwide?
+
+viral_potential: 0-10
+
+How likely is this to generate curiosity, clicks
+and watch time?
+
+english_audience: 0-10
+
+How suitable is it for a global English audience?
+
+story_potential: 0-10
+
+Can it become a compelling 30-60 second story?
+
+specificity: 0-10
+
+Does the exact topic contain enough information?
+
+originality: 0-10
+
+Can we create original informational content
+instead of simply reproducing existing content?
+
+==========================================
+AUTOMATIC REJECTION
+==========================================
+
+Set is_good_for_shorts = false if:
+
+- topic is only a brand name
+- topic is only a product name
+- topic is only a stock ticker
+- topic is only a person's name
+- topic is only a search query
+- topic is a song
+- topic is a music video
+- topic is a game
+- topic is gameplay
+- topic is esports
+- topic is a movie
+- topic is a trailer
+- topic is a TV show
+- topic is anime
+- topic is a sports match
+- topic is celebrity gossip
+- topic is too vague
+- topic requires guessing missing context
+- topic has no clear story
+
+Even if such a topic is extremely popular.
+
+==========================================
+SCORE
+==========================================
+
+Calculate:
+
+score =
+global_interest * 2
++ viral_potential * 2
++ english_audience * 1.5
++ story_potential * 2
++ specificity * 1.5
++ originality * 1
+
+Maximum theoretical score = 100.
+
+Round to an integer.
+
+==========================================
+OUTPUT
+==========================================
 
 Return ONLY valid JSON.
 
-Do not use Markdown.
+Do not use markdown.
 
-Do not use ```json.
+Do not use ```.
 
-Do not add explanations outside the JSON.
-"""
+Return an array.
 
+Each object must contain:
 
-# ==========================================
-# BATCH JUDGE PROMPT
-# ==========================================
+{
+    "topic": "...",
+    "is_good_for_shorts": true,
+    "category": "science",
+    "global_interest": 0,
+    "viral_potential": 0,
+    "english_audience": 0,
+    "story_potential": 0,
+    "specificity": 0,
+    "originality": 0,
+    "score": 0,
+    "reason": "short explanation"
+}
 
-def build_batch_prompt(topics):
+Allowed categories include:
 
-    topic_lines = []
-
-    for index, topic in enumerate(
-        topics,
-        start=1
-    ):
-
-        topic_lines.append(
-            f'{index}. "{topic}"'
-        )
-
-    topics_text = "\n".join(
-        topic_lines
-    )
-
-    return f"""
-{SYSTEM_PROMPT}
-
-Analyze ALL of the following trending topics.
-
-TOPICS:
-
-{topics_text}
-
-Return exactly ONE JSON object with this structure:
-
-{{
-    "results": [
-        {{
-            "index": 1,
-            "topic": "original topic",
-            "is_good_for_shorts": true,
-            "category": "technology",
-            "global_interest": 0,
-            "viral_potential": 0,
-            "english_audience": 0,
-            "story_potential": 0,
-            "score": 0,
-            "reason": "short explanation"
-        }}
-    ]
-}}
-
-IMPORTANT:
-
-You MUST return exactly one result for EVERY topic.
-
-The "index" must match the original topic number.
-
-Do not skip topics.
-
-Do not merge topics.
-
-Do not invent topics.
-
-Scores:
-
-global_interest: 0-10
-viral_potential: 0-10
-english_audience: 0-10
-story_potential: 0-10
-
-score: 0-100
-
-Use this general scoring logic:
-
-- 80-100 = excellent topic for our Shorts channel
-- 65-79 = potentially good
-- 50-64 = weak / needs a stronger angle
-- 30-49 = poor
-- 0-29 = unsuitable
-
-is_good_for_shorts should normally be true only when
-the score is approximately 65 or higher.
-
-The reason must be concise.
-
-category must be a short English category such as:
-
-technology
 science
+technology
 space
 psychology
-business
-world events
 history
-inventions
-AI
-health
+business
+invention
+discovery
+human_behavior
+future
+world_event
 environment
 other
-
-Remember:
-
-POPULAR ≠ GOOD.
-
-We are specifically looking for topics that can become
-original English informational Shorts.
 """
 
 
 # ==========================================
-# EXTRACT JSON
+# PRE-FILTER
 # ==========================================
 
-def extract_json(text):
+BAD_KEYWORDS = [
 
-    if not text:
-        raise ValueError(
-            "Empty Gemini response"
-        )
+    # MUSIC
+    "official music video",
+    "official lyric video",
+    "lyrics",
+    "dance practice",
+    "new song",
+    "new songs",
+    "official video",
+    "album",
+    "mv full",
 
-    text = text.strip()
+    # GAMING
+    "minecraft",
+    "roblox",
+    "fortnite",
+    "gta 5",
+    "gta 6",
+    "call of duty",
+    "black ops",
+    "brawl stars",
+    "rainbow six",
+    "gameplay",
+    "gaming",
+    "esports",
+    "goty",
 
-    # --------------------------------------
-    # Remove Markdown code blocks
-    # --------------------------------------
+    # MOVIES / TV
+    "official trailer",
+    "official teaser",
+    "movie trailer",
+    "season 2",
+    "season 3",
+    "netflix",
+    "marvel",
+    "anime",
 
-    if text.startswith("```"):
+    # SPORTS
+    "vs ",
+    " vs.",
+    "match highlights",
+    "highlights",
+    "lck",
 
-        text = re.sub(
-            r"^```(?:json)?",
-            "",
-            text,
-            flags=re.IGNORECASE
-        )
+    # LIVESTREAM
+    "#live",
+    "🔴live",
 
-        text = re.sub(
-            r"```$",
-            "",
-            text
-        )
-
-        text = text.strip()
-
-    # --------------------------------------
-    # Find JSON object
-    # --------------------------------------
-
-    start = text.find("{")
-    end = text.rfind("}")
-
-    if start == -1 or end == -1:
-
-        raise ValueError(
-            "Gemini did not return valid JSON"
-        )
-
-    text = text[
-        start:
-        end + 1
-    ]
-
-    return json.loads(
-        text
-    )
+]
 
 
-# ==========================================
-# FALLBACK RESULT
-# ==========================================
+def hard_filter_topic(topic):
 
-def create_fallback(
-    topic
-):
+    text = topic.lower().strip()
 
-    return {
+    for keyword in BAD_KEYWORDS:
 
-        "topic":
-            topic,
+        if keyword in text:
 
-        "is_good_for_shorts":
-            False,
+            return False
 
-        "category":
-            "unknown",
-
-        "global_interest":
-            0,
-
-        "viral_potential":
-            0,
-
-        "english_audience":
-            0,
-
-        "story_potential":
-            0,
-
-        "score":
-            0,
-
-        "reason":
-            "AI Judge failed"
-
-    }
+    return True
 
 
 # ==========================================
-# VALIDATE RESULT
+# JUDGE ALL TOPICS IN ONE REQUEST
 # ==========================================
 
-def normalize_result(
-    result,
-    topic
-):
-
-    if not isinstance(
-        result,
-        dict
-    ):
-
-        return create_fallback(
-            topic
-        )
-
-    result["topic"] = topic
-
-    # --------------------------------------
-    # Numeric fields
-    # --------------------------------------
-
-    numeric_fields = [
-
-        "global_interest",
-        "viral_potential",
-        "english_audience",
-        "story_potential",
-        "score"
-
-    ]
-
-    for field in numeric_fields:
-
-        try:
-
-            value = int(
-                result.get(
-                    field,
-                    0
-                )
-            )
-
-        except (
-            TypeError,
-            ValueError
-        ):
-
-            value = 0
-
-        if field == "score":
-
-            value = max(
-                0,
-                min(
-                    value,
-                    100
-                )
-            )
-
-        else:
-
-            value = max(
-                0,
-                min(
-                    value,
-                    10
-                )
-            )
-
-        result[field] = value
-
-    # --------------------------------------
-    # Boolean
-    # --------------------------------------
-
-    result["is_good_for_shorts"] = bool(
-        result.get(
-            "is_good_for_shorts",
-            False
-        )
-    )
-
-    # --------------------------------------
-    # Category
-    # --------------------------------------
-
-    category = result.get(
-        "category",
-        "unknown"
-    )
-
-    if not isinstance(
-        category,
-        str
-    ):
-
-        category = "unknown"
-
-    result["category"] = (
-        category.strip()
-        or "unknown"
-    )
-
-    # --------------------------------------
-    # Reason
-    # --------------------------------------
-
-    reason = result.get(
-        "reason",
-        ""
-    )
-
-    if not isinstance(
-        reason,
-        str
-    ):
-
-        reason = ""
-
-    result["reason"] = (
-        reason.strip()
-        or "No reason provided"
-    )
-
-    return result
-
-
-# ==========================================
-# JUDGE TOPICS IN ONE BATCH
-# ==========================================
-
-def judge_topics(
-    topics
-):
+def judge_topics(topics):
 
     print()
     print("================================")
-    print("🤖 AI TREND JUDGE")
+    print("🤖 AI TREND JUDGE V2")
     print("================================")
     print()
-
-    if not topics:
-
-        print(
-            "⚠️ No topics to analyze"
-        )
-
-        return []
 
     # ======================================
-    # CLEAN TOPICS
+    # HARD FILTER
     # ======================================
 
     clean_topics = []
 
     for topic in topics:
 
-        if not isinstance(
-            topic,
-            str
-        ):
+        if hard_filter_topic(topic):
 
-            continue
+            clean_topics.append(topic)
 
-        topic = topic.strip()
+        else:
 
-        if not topic:
+            print(
+                f"🚫 Hard filtered: {topic}"
+            )
 
-            continue
+    print()
 
-        clean_topics.append(
-            topic
-        )
+    print(
+        f"📥 Original topics: {len(topics)}"
+    )
+
+    print(
+        f"🧹 After hard filter: "
+        f"{len(clean_topics)}"
+    )
 
     if not clean_topics:
 
         return []
 
-    print(
-        f"📊 Topics for AI Judge: "
-        f"{len(clean_topics)}"
-    )
-
-    print(
-        "🚀 Sending all topics in ONE Gemini request..."
-    )
-
-    print()
-
     # ======================================
-    # BUILD PROMPT
+    # PREPARE TOPICS
     # ======================================
 
-    prompt = build_batch_prompt(
-        clean_topics
+    numbered_topics = []
+
+    for index, topic in enumerate(
+        clean_topics,
+        start=1
+    ):
+
+        numbered_topics.append(
+            f"{index}. {topic}"
+        )
+
+    topics_text = "\n".join(
+        numbered_topics
     )
+
+    # ======================================
+    # GEMINI PROMPT
+    # ======================================
+
+    prompt = f"""
+{SYSTEM_PROMPT}
+
+Analyze ALL topics below.
+
+IMPORTANT:
+
+Return exactly ONE JSON object for EACH topic.
+
+Keep the original topic text exactly.
+
+Do not invent missing context.
+
+Topics:
+
+{topics_text}
+"""
 
     try:
 
-        # ==================================
-        # ONE API REQUEST
-        # ==================================
+        print(
+            "🚀 Sending all topics "
+            "in ONE Gemini request..."
+        )
 
         response = client.models.generate_content(
             model=MODEL_NAME,
@@ -568,34 +534,46 @@ def judge_topics(
         text = response.text.strip()
 
         # ==================================
-        # PARSE JSON
+        # CLEAN JSON
         # ==================================
 
-        data = extract_json(
+        if text.startswith("```"):
+
+            text = text.replace(
+                "```json",
+                ""
+            )
+
+            text = text.replace(
+                "```",
+                ""
+            )
+
+            text = text.strip()
+
+        results = json.loads(
             text
         )
 
-        raw_results = data.get(
-            "results",
-            []
-        )
+        # ==================================
+        # VALIDATE
+        # ==================================
 
         if not isinstance(
-            raw_results,
+            results,
             list
         ):
 
-            raise ValueError(
-                "Invalid results format"
+            print(
+                "⚠️ Gemini returned "
+                "non-list JSON"
             )
 
-        # ==================================
-        # MAP BY INDEX
-        # ==================================
+            return []
 
-        indexed_results = {}
+        validated = []
 
-        for result in raw_results:
+        for result in results:
 
             if not isinstance(
                 result,
@@ -604,90 +582,194 @@ def judge_topics(
 
                 continue
 
-            index = result.get(
-                "index"
+            topic = result.get(
+                "topic",
+                ""
             )
 
-            try:
+            # --------------------------------
+            # REQUIRED FIELDS
+            # --------------------------------
 
-                index = int(
-                    index
-                )
+            result.setdefault(
+                "is_good_for_shorts",
+                False
+            )
 
-            except (
-                TypeError,
-                ValueError
-            ):
+            result.setdefault(
+                "category",
+                "other"
+            )
+
+            result.setdefault(
+                "global_interest",
+                0
+            )
+
+            result.setdefault(
+                "viral_potential",
+                0
+            )
+
+            result.setdefault(
+                "english_audience",
+                0
+            )
+
+            result.setdefault(
+                "story_potential",
+                0
+            )
+
+            result.setdefault(
+                "specificity",
+                0
+            )
+
+            result.setdefault(
+                "originality",
+                0
+            )
+
+            result.setdefault(
+                "score",
+                0
+            )
+
+            result.setdefault(
+                "reason",
+                ""
+            )
+
+            # ==================================
+            # FORCE INTEGER SCORES
+            # ==================================
+
+            score_fields = [
+
+                "global_interest",
+                "viral_potential",
+                "english_audience",
+                "story_potential",
+                "specificity",
+                "originality",
+                "score"
+
+            ]
+
+            for field in score_fields:
+
+                try:
+
+                    result[field] = int(
+                        result[field]
+                    )
+
+                except:
+
+                    result[field] = 0
+
+            # ==================================
+            # CLAMP SCORES
+            # ==================================
+
+            for field in score_fields:
+
+                if field == "score":
+
+                    result[field] = max(
+                        0,
+                        min(
+                            100,
+                            result[field]
+                        )
+                    )
+
+                else:
+
+                    result[field] = max(
+                        0,
+                        min(
+                            10,
+                            result[field]
+                        )
+                    )
+
+            # ==================================
+            # FINAL SAFETY FILTER
+            # ==================================
+
+            if not topic:
 
                 continue
 
-            indexed_results[
-                index
-            ] = result
+            if not hard_filter_topic(
+                topic
+            ):
 
-        # ==================================
-        # BUILD FINAL RESULTS
-        # ==================================
+                result[
+                    "is_good_for_shorts"
+                ] = False
 
-        results = []
+                result["score"] = 0
 
-        for index, topic in enumerate(
-            clean_topics,
-            start=1
-        ):
+            # ==================================
+            # REJECT LOW SPECIFICITY
+            # ==================================
 
-            result = indexed_results.get(
-                index
-            )
+            if result[
+                "specificity"
+            ] < 5:
 
-            if result is None:
+                result[
+                    "is_good_for_shorts"
+                ] = False
 
-                result = create_fallback(
-                    topic
-                )
+            # ==================================
+            # REJECT LOW STORY POTENTIAL
+            # ==================================
 
-            else:
+            if result[
+                "story_potential"
+            ] < 5:
 
-                result = normalize_result(
-                    result,
-                    topic
-                )
+                result[
+                    "is_good_for_shorts"
+                ] = False
 
-            results.append(
+            # ==================================
+            # REJECT LOW ORIGINALITY
+            # ==================================
+
+            if result[
+                "originality"
+            ] < 5:
+
+                result[
+                    "is_good_for_shorts"
+                ] = False
+
+            # ==================================
+            # REJECT LOW SCORE
+            # ==================================
+
+            if result[
+                "score"
+            ] < 60:
+
+                result[
+                    "is_good_for_shorts"
+                ] = False
+
+            validated.append(
                 result
             )
-
-            # ==================================
-            # PRINT
-            # ==================================
-
-            print(
-                f"🤖 [{index}/{len(clean_topics)}] "
-                f"{topic}"
-            )
-
-            print(
-                f"   Score: "
-                f"{result['score']}/100"
-            )
-
-            print(
-                f"   Category: "
-                f"{result['category']}"
-            )
-
-            print(
-                f"   Good: "
-                f"{result['is_good_for_shorts']}"
-            )
-
-            print()
 
         # ==================================
         # SORT
         # ==================================
 
-        results.sort(
+        validated.sort(
             key=lambda item:
                 item.get(
                     "score",
@@ -697,22 +779,10 @@ def judge_topics(
         )
 
         # ==================================
-        # STATISTICS
+        # PRINT RESULTS
         # ==================================
 
-        approved = [
-
-            item
-
-            for item in results
-
-            if item.get(
-                "is_good_for_shorts",
-                False
-            )
-
-        ]
-
+        print()
         print(
             "================================"
         )
@@ -725,12 +795,21 @@ def judge_topics(
             "================================"
         )
 
-        print()
-
         print(
             f"📥 Analyzed: "
-            f"{len(results)}"
+            f"{len(validated)}"
         )
+
+        approved = [
+
+            item
+            for item in validated
+            if item.get(
+                "is_good_for_shorts",
+                False
+            )
+
+        ]
 
         print(
             f"✅ Approved: "
@@ -739,32 +818,81 @@ def judge_topics(
 
         print(
             f"❌ Rejected: "
-            f"{len(results) - len(approved)}"
+            f"{len(validated) - len(approved)}"
         )
 
         print()
 
-        return results
+        # ==================================
+        # TOP APPROVED
+        # ==================================
+
+        print(
+            "🔥 AI APPROVED TRENDS"
+        )
+
+        print(
+            "================================"
+        )
+
+        for index, item in enumerate(
+            approved[:10],
+            start=1
+        ):
+
+            print(
+                f"#{index} "
+                f"{item.get('topic')}"
+            )
+
+            print(
+                f"   Score: "
+                f"{item.get('score')}/100"
+            )
+
+            print(
+                f"   Category: "
+                f"{item.get('category')}"
+            )
+
+            print(
+                f"   Global: "
+                f"{item.get('global_interest')}/10"
+            )
+
+            print(
+                f"   Viral: "
+                f"{item.get('viral_potential')}/10"
+            )
+
+            print(
+                f"   Story: "
+                f"{item.get('story_potential')}/10"
+            )
+
+            print(
+                f"   Specificity: "
+                f"{item.get('specificity')}/10"
+            )
+
+            print(
+                f"   Originality: "
+                f"{item.get('originality')}/10"
+            )
+
+            print(
+                f"   Reason: "
+                f"{item.get('reason')}"
+            )
+
+            print()
+
+        return approved
 
     except Exception as error:
 
         print(
-            f"⚠️ AI Judge error: "
-            f"{error}"
+            f"❌ AI Judge error: {error}"
         )
 
-        # ==================================
-        # FALLBACK
-        # ==================================
-
-        results = []
-
-        for topic in clean_topics:
-
-            results.append(
-                create_fallback(
-                    topic
-                )
-            )
-
-        return results
+        return []
