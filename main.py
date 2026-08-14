@@ -1,10 +1,5 @@
-from trends.global_collector import (
-    collect_global_trends
-)
-
-from trends.storage import (
-    save_global_trends
-)
+from trends.collector import collect_trends
+from trends.storage import save_trends
 
 
 def main():
@@ -13,11 +8,9 @@ def main():
     print("🚀 YouTube Global Shorts")
     print()
 
-    trends = collect_global_trends()
+    trends = collect_trends()
 
-    save_global_trends(
-        trends
-    )
+    save_trends(trends)
 
     print()
     print("✅ Global trend scan completed")
