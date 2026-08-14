@@ -2,12 +2,12 @@ import json
 import os
 
 
-FILE_PATH = (
-    "data/trend_candidates.json"
+RAW_TRENDS_FILE = (
+    "data/global_trends.json"
 )
 
 
-def save_trends(trends):
+def save_global_trends(trends):
 
     os.makedirs(
         "data",
@@ -15,7 +15,7 @@ def save_trends(trends):
     )
 
     with open(
-        FILE_PATH,
+        RAW_TRENDS_FILE,
         "w",
         encoding="utf-8"
     ) as file:
@@ -29,5 +29,5 @@ def save_trends(trends):
 
     print()
     print(
-        f"💾 Saved: {FILE_PATH}"
+        f"💾 Saved: {RAW_TRENDS_FILE}"
     )
