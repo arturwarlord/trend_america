@@ -4,6 +4,7 @@ import re
 import time
 
 from google import genai
+from google.genai import types
 
 
 # =========================================================
@@ -17,9 +18,15 @@ if not API_KEY:
         "❌ GEMINI_KEY is not configured"
     )
 
+
 client = genai.Client(
     api_key=API_KEY
 )
+
+
+# =========================================================
+# MODEL
+# =========================================================
 
 MODEL_NAME = "gemini-3.5-flash-lite"
 
@@ -30,141 +37,175 @@ MODEL_NAME = "gemini-3.5-flash-lite"
 
 BATCH_SIZE = 10
 
-# Минимальный AI score
-MIN_SCORE = 60
+TARGET_APPROVED = 10
 
-# Минимальные требования
-MIN_SPECIFICITY = 4
-MIN_FACTUAL_CONFIDENCE = 5
+MAX_RETRIES = 2
+
+RETRY_DELAY = 2
+
+
+# =========================================================
+# APPROVAL SETTINGS
+# =========================================================
+#
+# V8 is intentionally more flexible than V6/V7.
+#
+# Short trend titles do NOT need to contain the complete story.
+#
+# Example:
+#
+# Google Pixel
+# NASA
+# Apple
+# Tesla
+# Home Alone
+#
+# can potentially become research-based Shorts.
+#
+# But clearly bad content is still hard blocked.
+#
+
+
+MIN_SCORE = 58
+
 MIN_STORY_POTENTIAL = 5
 
-# Минимальные глобальные показатели
-MIN_GLOBAL_INTEREST = 5
-MIN_ENGLISH_AUDIENCE = 5
-MIN_ORIGINALITY = 5
+MIN_FACTUAL_CONFIDENCE = 5
+
+MIN_SPECIFICITY = 3
 
 
 # =========================================================
 # HARD BLOCK KEYWORDS
 # =========================================================
-#
-# Эти категории AI не должен пропускать даже если
-# они имеют высокий viral potential.
-#
 
-HARD_BLOCK_KEYWORDS = {
+HARD_BLOCK_PATTERNS = [
 
-    # -------------------------
+    # =====================================================
     # GAMING
-    # -------------------------
+    # =====================================================
 
-    "minecraft",
-    "roblox",
-    "fortnite",
-    "gta",
-    "grand theft auto",
-    "valorant",
-    "league of legends",
-    "lol esports",
-    "dota",
-    "dota 2",
-    "counter strike",
-    "counter-strike",
-    "cs2",
-    "call of duty",
-    "warzone",
-    "brawl stars",
-    "clash royale",
-    "pokemon go",
-    "gameplay",
-    "walkthrough",
-    "lets play",
-    "let's play",
-    "gaming",
-    "esports",
-    "speedrun",
-    "game trailer",
-    "gameplay trailer",
+    r"\bminecraft\b",
+    r"\broblox\b",
+    r"\bfortnite\b",
+    r"\bgta\b",
+    r"\bgta\s*5\b",
+    r"\bgta\s*v\b",
+    r"\bgrand theft auto\b",
 
-    # -------------------------
+    r"\bgameplay\b",
+    r"\blets play\b",
+    r"\blet's play\b",
+    r"\bgaming\b",
+    r"\bvideo game\b",
+    r"\bgame video\b",
+
+    r"\bserver\b.*\bgame\b",
+    r"\bgame\b.*\bserver\b",
+
+    r"\besports\b",
+
+    r"\bbrawl stars\b",
+    r"\bclash royale\b",
+    r"\bcall of duty\b",
+    r"\bvalorant\b",
+    r"\bpubg\b",
+    r"\bfree fire\b",
+    r"\bleague of legends\b",
+    r"\bdota\b",
+
+    # =====================================================
     # MUSIC
-    # -------------------------
+    # =====================================================
 
-    "official music video",
-    "music video",
-    "lyric video",
-    "lyrics",
-    "dance practice",
-    "official audio",
-    "song",
-    "new song",
-    "album",
-    "new album",
-    "single",
-    "remix",
-    "live performance",
-    "music battle",
+    r"\bdance practice\b",
+    r"\bmusic video\b",
+    r"\bofficial music video\b",
+    r"\blyric video\b",
+    r"\blyrics\b",
+    r"\bdance video\b",
+    r"\bdance performance\b",
 
-    # -------------------------
-    # ENTERTAINMENT
-    # -------------------------
+    r"\bmv\b",
 
-    "movie trailer",
-    "official trailer",
-    "teaser trailer",
-    "anime",
-    "episode",
-    "season trailer",
-    "tv trailer",
-    "reaction",
-    "reaction video",
-    "livestream",
-    "live stream",
-    "fan edit",
-    "fan content",
+    r"\bsong\b",
+    r"\bsingle\b",
+    r"\balbum\b",
 
-    # -------------------------
+    # Korean / Japanese common music markers
+
+    r"댄스\s*프랙티스",
+    r"댄스\s*비디오",
+    r"뮤직\s*비디오",
+    r"歌詞",
+    r"ダンス",
+    r"ミュージックビデオ",
+
+    # =====================================================
+    # FICTION / ANIME
+    # =====================================================
+
+    r"\banime\b",
+    r"\bmanga\b",
+    r"\bcartoon\b",
+
+    r"\bfictional\b",
+    r"\bfiction\b",
+
+    r"\bspiderman\b",
+    r"\bspider-man\b",
+    r"\bbatman\b",
+    r"\bsuperman\b",
+
+    r"\bshinchan\b",
+    r"\bdoraemon\b",
+
+    # =====================================================
+    # TRAILERS
+    # =====================================================
+
+    r"\btrailer\b",
+    r"\bofficial trailer\b",
+    r"\bteaser\b",
+
+    # =====================================================
+    # FAN CONTENT
+    # =====================================================
+
+    r"\bfan edit\b",
+    r"\bfan made\b",
+    r"\bfanmade\b",
+    r"\breaction video\b",
+    r"\blivestream\b",
+    r"\blive stream\b",
+    r"\bstreamer\b",
+
+    # =====================================================
     # SPORTS MATCHES
-    # -------------------------
+    # =====================================================
 
-    "vs",
-    " v ",
-    "match",
-    "game highlights",
-    "match highlights",
-    "highlights",
-    "quarterfinal",
-    "semifinal",
-    "final match",
-    "tournament",
+    r"\bvs\b",
+    r"\bversus\b",
 
-}
+    r"\bmatch\b",
+    r"\bgame\s+\d+\b",
 
+    r"\bfinal\b.*\bmatch\b",
+    r"\bmatch\b.*\bfinal\b",
 
-# =========================================================
-# HARD BLOCK PHRASES
-# =========================================================
+    r"\bhighlights\b",
 
-HARD_BLOCK_PHRASES = [
+    r"\bworld cup\b.*\bmatch\b",
 
-    "official music video",
-    "music video",
-    "lyric video",
-    "dance practice",
+    # =====================================================
+    # ENTERTAINMENT
+    # =====================================================
 
-    "gameplay",
-    "let's play",
-    "lets play",
-    "game trailer",
-
-    "movie trailer",
-    "official trailer",
-    "teaser trailer",
-
-    "reaction video",
-    "fan edit",
-    "livestream",
-    "live stream",
+    r"\bprank\b",
+    r"\bchallenge\b",
+    r"\breaction\b",
+    r"\bfunny\b",
+    r"\bcompilation\b",
 
 ]
 
@@ -174,40 +215,51 @@ HARD_BLOCK_PHRASES = [
 # =========================================================
 
 SYSTEM_PROMPT = r"""
-You are V8 of an expert global YouTube Shorts trend judge.
+You are an expert global YouTube Shorts trend analyst.
 
-Your job is to evaluate TRENDING TOPICS and decide whether
-they can become ORIGINAL English informational YouTube Shorts.
+Your job is to evaluate TRENDING TOPICS for an automated
+English YouTube Shorts channel.
 
-The input usually comes from Google Trends and YouTube Trends.
+The channel creates ORIGINAL informational, educational,
+explanatory or factual story-based Shorts.
+
+The input is usually a SHORT TREND TITLE extracted from
+Google Trends or YouTube Trends.
 
 IMPORTANT:
 
-You are judging the TREND, not writing the final Short.
+The title is NOT necessarily the final story.
 
-The title may be extremely short.
+A short keyword can still be valuable.
 
 Examples:
 
+"Google Pixel"
 "NASA"
 "Tesla"
-"Google Pixel"
-"Home Alone"
 "Apple"
-"OpenAI"
-"Bitcoin"
+"Home Alone"
 "SpaceX"
+"ChatGPT"
+"Bitcoin"
 
-A short title does NOT automatically mean the topic is useless.
+These can potentially lead to strong Shorts because the
+next pipeline stage can research the current story.
 
-However, you must NOT invent a specific event that is not
-reasonably indicated by the topic.
+Do NOT require the exact event to already appear in the title.
 
-========================================================
-CORE GOAL
-========================================================
+However:
 
-We want topics that can eventually become:
+DO NOT invent a specific event.
+
+You are evaluating whether the topic has a realistic
+research path.
+
+=========================================================
+CORE OBJECTIVE
+=========================================================
+
+Find topics that can become original English Shorts with:
 
 HOOK
 → surprising fact
@@ -215,277 +267,168 @@ HOOK
 → escalation
 → payoff
 
-The final video will be researched before the script is written.
+The goal is NOT to reproduce the trending video.
 
-Therefore the topic only needs to have a realistic researchable
-story path.
+The goal is to use the trend as a starting point for an
+original factual story.
 
-We are NOT trying to reproduce the trending video.
+=========================================================
+GOOD TOPIC TYPES
+=========================================================
 
-We want to create an ORIGINAL informational Short.
+Prefer:
 
-========================================================
-WHAT MAKES A GOOD TOPIC
-========================================================
+technology
+AI
+science
+space
+discoveries
+psychology
+human behavior
+engineering
+inventions
+business
+economics
+history
+future technology
+major world events
+unusual real-world events
+factual mysteries
+strange places
+important human stories
+technology products
+major companies
 
-Strong categories include:
+=========================================================
+SHORT TITLES ARE ALLOWED
+=========================================================
 
-- technology
-- AI
-- science
-- space
-- discoveries
-- psychology
-- human behavior
-- engineering
-- inventions
-- business
-- economics
-- history
-- future technology
-- unusual real-world events
-- major world events
-- factual mysteries
-- strange places
-- surprising human behavior
-- important companies/products when there is realistic
-  research potential
-
-========================================================
-SHORT TITLES
-========================================================
-
-DO NOT punish a topic simply because the title is short.
+Do NOT automatically reject a short title.
 
 For example:
 
 "Google Pixel"
 
-This is a recognizable global technology/product topic.
+could receive:
 
-It does NOT tell us the exact current story.
+global_interest: 8
+viral_potential: 7
+english_audience: 9
+story_potential: 6
+specificity: 4
+factual_confidence: 8
+originality: 8
 
-Therefore:
+This is potentially useful.
 
-global_interest can be high
-viral_potential can be high
-english_audience can be high
-originality can be high
-specificity can be moderate
-story_potential can be moderate/high
-factual_confidence can still be high
+The exact story should be researched later.
 
-But do NOT invent:
+=========================================================
+VERY IMPORTANT
+=========================================================
 
-"Google Pixel launched satellite messaging"
+Do NOT invent a current event.
 
-unless the title itself actually indicates that.
+Bad:
 
-Instead, evaluate:
+"Google Pixel launched satellite messaging."
 
-"Major global technology/product topic with many
-researchable current-story possibilities."
+if that event is not contained in the topic.
 
-========================================================
-ENTITY VS VAGUE ENTERTAINMENT
-========================================================
+Good:
 
-A famous company, technology product, scientific organization,
-space organization, or historical subject is NOT automatically
-bad because it is short.
+"Major global technology product with multiple
+researchable story angles. Exact current angle requires
+research."
 
-Examples that can be useful:
+=========================================================
+GLOBAL AUDIENCE
+=========================================================
 
-"NASA"
-"SpaceX"
-"Tesla"
-"OpenAI"
-"Google Pixel"
-"Apple"
-"Bitcoin"
-"James Webb"
-"AI"
+The final video is English.
 
-These can have strong global interest.
+Prefer globally recognizable subjects.
 
-However, purely entertainment-oriented entities should be
-treated much more carefully.
+Strong:
 
-Examples:
+AI
+NASA
+Apple
+Google
+Tesla
+SpaceX
+Bitcoin
+Microsoft
+Amazon
+OpenAI
+Samsung
+Google Pixel
+scientific discoveries
+space
+technology
+psychology
+business
+economics
 
-"That Way"
-"Pop Off Pop Off"
-"Big Walk"
+Lower value:
 
-These are too vague and should normally be rejected.
+local influencers
+local entertainment
+local fandom
+local-language celebrity content
 
-========================================================
-HOME ALONE EXAMPLE
-========================================================
+=========================================================
+HARD REJECTIONS
+=========================================================
 
-"HOME ALONE" is a famous movie.
+Reject:
 
-A movie title alone should NOT automatically receive a high
-score merely because the movie is popular.
+gaming
+video games
+gameplay
+Minecraft
+Roblox
+Fortnite
+GTA
+esports
 
-However, it can potentially lead to an ORIGINAL factual Short
-if there is a real-world angle such as:
+music videos
+songs
+albums
+lyrics
+dance practice
+dance videos
 
-- production history
-- unusual filming facts
-- historical context
-- real locations
-- business impact
-- cultural phenomenon
+anime
+fiction
+fictional characters
+cartoons
 
-Therefore it may receive moderate scores.
+movie trailers
+TV trailers
+teasers
 
-But because the title itself does not indicate which factual
-story is trending, specificity should remain moderate.
+fan edits
+reaction videos
+livestreams
+pranks
+generic challenges
 
-Do NOT invent a specific fact.
+sports matches
+match highlights
+simple team-vs-team titles
 
-========================================================
-COMPANIES AND PRODUCTS
-========================================================
+celebrity gossip
 
-A company/product keyword can be useful.
+generic entertainment
 
-Examples:
-
-"Tesla"
-"Apple"
-"Google Pixel"
-"OpenAI"
-"Microsoft"
-"Samsung"
-
-Do NOT assume a specific announcement.
-
-Evaluate the general research potential.
-
-If it is a major global entity:
-
-global_interest may be 7-10
-english_audience may be 7-10
-
-Specificity depends on how much the title tells us.
-
-========================================================
-AI TOPICS
-========================================================
-
-AI is a high-value category.
-
-Examples:
-
-"OpenAI"
-"Gemini"
-"Claude"
-"ChatGPT"
-"AI agents"
-
-These can be strong because the subject has high global
-interest and many factual story opportunities.
-
-Again:
-
-DO NOT invent a specific announcement.
-
-========================================================
-SCIENCE / SPACE
-========================================================
-
-Science and space are high-value categories.
-
-Examples:
-
-"NASA"
-"James Webb"
-"Black hole"
-"Mars"
-"solar storm"
-
-These can be strong because they naturally create curiosity.
-
-========================================================
-BUSINESS
-========================================================
-
-Business topics can be good when they have a real-world
-researchable angle.
-
-Examples:
-
-"Tesla"
-"Bitcoin"
-"Amazon"
-"Spotify"
-"Ticketmaster"
-
-A company name alone is less specific than:
-
-"Spotify changes royalty system"
-
-But the company name can still have significant global interest.
-
-========================================================
-HISTORY
-========================================================
-
-Historical subjects can be useful if they have a clear
-researchable story.
-
-Examples:
-
-"Titanic"
-"Roman Empire"
-"Cold War"
-"Pompeii"
-
-However, generic entertainment content should not be confused
-with historical content.
-
-========================================================
-BAD CONTENT
-========================================================
-
-Strongly reject:
-
-- gaming
-- gameplay
-- Minecraft
-- Roblox
-- Fortnite
-- GTA
-- esports
-- gaming tournaments
-- music videos
-- songs
-- albums
-- lyric videos
-- dance practice
-- movie trailers
-- TV trailers
-- anime
-- fictional characters
-- fictional stories
-- reaction videos
-- livestreams
-- fan content
-- sports matches
-- sports highlights
-- random celebrity gossip
-- vague memes
-- meaningless entertainment titles
-
-========================================================
+=========================================================
 SPORTS EXCEPTION
-========================================================
+=========================================================
 
 Sports are normally rejected.
 
-But a real-world factual sports story can sometimes be useful.
+But a real-world factual sports story can be useful.
 
 Examples:
 
@@ -495,7 +438,7 @@ Examples:
 
 "football club financial scandal"
 
-These can be useful.
+These can be accepted.
 
 But:
 
@@ -505,13 +448,13 @@ But:
 
 must be rejected.
 
-========================================================
+=========================================================
 MUSIC EXCEPTION
-========================================================
+=========================================================
 
 Music content is normally rejected.
 
-But real-world music industry stories can be useful.
+But a real-world industry story can be accepted.
 
 Example:
 
@@ -523,21 +466,16 @@ But:
 
 "Spotify"
 
-is only a company/entity keyword and should have lower
-specificity than a clearly defined event.
+is only a company keyword and should have moderate
+specificity.
 
-========================================================
+=========================================================
 MOVIE / ENTERTAINMENT EXCEPTION
-========================================================
+=========================================================
 
-Reject:
+Movie trailers and fictional content are rejected.
 
-movie trailers
-anime
-fictional characters
-fictional stories
-
-But real-world entertainment industry events may be useful.
+But real-world stories can be accepted.
 
 Example:
 
@@ -545,190 +483,48 @@ Example:
 
 Potentially GOOD.
 
-========================================================
-GLOBAL AUDIENCE
-========================================================
+"Avengers trailer"
 
-The final Short is English.
+BAD.
 
-Prefer subjects that can interest viewers in multiple countries.
-
-High value:
-
-technology
-AI
-science
-space
-money
-business
-psychology
-history
-engineering
-major global events
-surprising discoveries
-
-Lower value:
-
-local influencers
-local TV personalities
-local fandom
-local-language entertainment
-obscure local events
-
-========================================================
-STORY POTENTIAL
-========================================================
-
-Ask:
-
-Can this topic reasonably lead to:
-
-Why is this trending?
-
-What happened?
-
-Why does it matter?
-
-How does it work?
-
-What changed?
-
-What surprising fact is connected to it?
-
-If YES, story_potential should generally be 5 or higher.
-
-A short entity name can still have story potential.
-
-========================================================
-SPECIFICITY
-========================================================
-
-Specificity does NOT mean:
-
-"Is the entire story already contained in the title?"
-
-Instead:
-
-"Does the title identify a recognizable subject that can
-reasonably be researched?"
-
-Examples:
-
-"Google Pixel"
-
-specificity: 4-6
-
-"Google Pixel satellite messaging"
-
-specificity: 7-9
-
-"Something happened"
-
-specificity: 1-2
-
-"That Way"
-
-specificity: 1-3
-
-========================================================
-FACTUAL CONFIDENCE
-========================================================
-
-This measures whether the topic represents a real-world
-researchable subject.
-
-A famous company can have high factual confidence.
-
-A vague meme can have low factual confidence.
-
-Do NOT confuse factual confidence with knowing the exact
-current event.
-
-========================================================
-ORIGINALITY
-========================================================
-
-Ask:
-
-Can we create an original informational Short from this topic?
-
-High-quality informational subjects should usually score 6-10.
-
-Gaming/music/fan content should be low.
-
-========================================================
+=========================================================
 SCORING
-========================================================
+=========================================================
 
-Give each value from 0 to 10.
+Give each score from 0 to 10.
 
 global_interest
+How interesting is this to a global audience?
+
 viral_potential
+How likely is this to generate curiosity?
+
 english_audience
+How suitable is it for English-speaking viewers?
+
 story_potential
+Can this become a factual story?
+
 specificity
+How clearly does the topic identify a subject?
+
+IMPORTANT:
+
+A short title can still receive specificity 3-5.
+
+Do NOT give specificity 0 merely because the title is short.
+
 factual_confidence
+How confident are you that the subject is real and
+researchable without inventing facts?
+
 originality
+Can we create an original Short rather than copying
+the source content?
 
-Do NOT make all scores low merely because a topic is short.
-
-========================================================
-SCORE EXAMPLES
-========================================================
-
-"Google Pixel"
-
-Possible:
-
-global_interest: 8
-viral_potential: 7
-english_audience: 9
-story_potential: 6
-specificity: 5
-factual_confidence: 8
-originality: 8
-
-This can be approved if the total score passes the threshold.
-
-"NASA"
-
-Possible:
-
-global_interest: 9
-viral_potential: 8
-english_audience: 10
-story_potential: 7
-specificity: 5
-factual_confidence: 10
-originality: 8
-
-Potentially approved.
-
-"That Way"
-
-Possible:
-
-global_interest: 2
-viral_potential: 5
-english_audience: 4
-story_potential: 1
-specificity: 1
-factual_confidence: 2
-originality: 2
-
-Reject.
-
-"Minecraft gameplay"
-
-Reject.
-
-"Spotify changes royalty system"
-
-Potentially strong.
-
-========================================================
+=========================================================
 CATEGORY
-========================================================
+=========================================================
 
 Use exactly one:
 
@@ -746,45 +542,52 @@ world
 mystery
 other
 
-========================================================
-DECISION
-========================================================
+=========================================================
+APPROVAL PHILOSOPHY
+=========================================================
 
-Set is_good_for_shorts to TRUE when the topic has a realistic
-path toward an original informational Short.
+The following can be APPROVED if the scores justify it:
 
-Do not require the exact final story to already be visible
-in the title.
+major companies
+major products
+major technology
+AI
+science
+space
+history
+psychology
+business
+major world events
 
-But reject clearly unsuitable content.
+The following should normally be REJECTED:
 
-========================================================
-IMPORTANT
-========================================================
+gaming
+music performance
+anime
+fiction
+movie trailers
+fan content
+livestreams
+generic entertainment
+sports matches
 
-Do not invent facts.
-
-Do not rewrite the topic.
-
-Do not merge topics.
-
-Preserve the original topic exactly.
-
-========================================================
+=========================================================
 OUTPUT
-========================================================
+=========================================================
 
 Return ONLY valid JSON.
 
 Return an array.
 
-The array MUST contain exactly one object per input topic.
+Exactly one object per input topic.
 
-No markdown.
+Preserve topic EXACTLY.
 
-No code fences.
+Do not rewrite the topic.
 
-No explanations outside JSON.
+Do not add markdown.
+
+Do not use code fences.
 
 Each object:
 
@@ -797,72 +600,67 @@ Each object:
     "viral_potential": 8,
     "english_audience": 9,
     "story_potential": 7,
-    "specificity": 6,
+    "specificity": 5,
     "factual_confidence": 8,
     "originality": 8,
 
     "reason": "Short explanation."
 }
 
-========================================================
-FINAL RULE
-========================================================
+Remember:
 
-The program will calculate the final score itself.
+Evaluate the TOPIC.
 
-Your boolean decision is advisory only.
-
-Be balanced.
-
-Do NOT reject a globally important entity merely because
-the trend title is short.
-
-Do NOT approve meaningless entertainment merely because
-it is trending.
+Do not invent the STORY.
 """
 
 
 # =========================================================
-# CLEAN JSON
+# NORMALIZE TOPIC
 # =========================================================
 
-def clean_json(text):
+def normalize_topic(topic):
 
-    if not text:
+    if topic is None:
         return ""
 
-    text = text.strip()
+    return str(topic).strip()
 
-    # Remove markdown fences
-    text = re.sub(
-        r"^```json\s*",
-        "",
-        text,
-        flags=re.IGNORECASE
-    )
 
-    text = re.sub(
-        r"^```\s*",
-        "",
-        text
-    )
+# =========================================================
+# HARD BLOCK CHECK
+# =========================================================
 
-    text = re.sub(
-        r"\s*```$",
-        "",
-        text
-    )
+def hard_block_reason(topic):
 
-    text = text.strip()
+    normalized = normalize_topic(
+        topic
+    ).lower()
 
-    # Find JSON array
-    start = text.find("[")
-    end = text.rfind("]")
+    if not normalized:
+        return "Empty topic."
 
-    if start != -1 and end != -1:
-        text = text[start:end + 1]
+    for pattern in HARD_BLOCK_PATTERNS:
 
-    return text.strip()
+        try:
+
+            if re.search(
+                pattern,
+                normalized,
+                flags=re.IGNORECASE
+            ):
+
+                return (
+                    "Rejected by hard content filter: "
+                    "gaming, music, entertainment, "
+                    "sports match, trailer, or fan content."
+                )
+
+        except re.error:
+
+            continue
+
+    return None
 
 
 # =========================================================
@@ -876,23 +674,91 @@ def failed_result(
 
     return {
 
-        "topic": topic,
+        "topic":
+            topic,
 
-        "is_good_for_shorts": False,
+        "is_good_for_shorts":
+            False,
 
-        "category": "other",
+        "category":
+            "other",
 
-        "global_interest": 0,
-        "viral_potential": 0,
-        "english_audience": 0,
-        "story_potential": 0,
-        "specificity": 0,
-        "factual_confidence": 0,
-        "originality": 0,
+        "global_interest":
+            0,
 
-        "score": 0,
+        "viral_potential":
+            0,
 
-        "reason": reason
+        "english_audience":
+            0,
+
+        "story_potential":
+            0,
+
+        "specificity":
+            0,
+
+        "factual_confidence":
+            0,
+
+        "originality":
+            0,
+
+        "score":
+            0,
+
+        "reason":
+            reason
+
+    }
+
+
+# =========================================================
+# HARD BLOCK RESULT
+# =========================================================
+
+def hard_block_result(
+    topic,
+    reason
+):
+
+    return {
+
+        "topic":
+            topic,
+
+        "is_good_for_shorts":
+            False,
+
+        "category":
+            "other",
+
+        "global_interest":
+            0,
+
+        "viral_potential":
+            0,
+
+        "english_audience":
+            0,
+
+        "story_potential":
+            0,
+
+        "specificity":
+            0,
+
+        "factual_confidence":
+            0,
+
+        "originality":
+            0,
+
+        "score":
+            0,
+
+        "reason":
+            reason
 
     }
 
@@ -905,184 +771,25 @@ def normalize_number(value):
 
     try:
 
-        value = float(value)
+        value = float(
+            value
+        )
 
     except Exception:
 
         return 0
 
     if value < 0:
-
         return 0
 
     if value > 10:
-
         return 10
 
     return value
 
 
 # =========================================================
-# NORMALIZE CATEGORY
-# =========================================================
-
-VALID_CATEGORIES = {
-
-    "technology",
-    "ai",
-    "science",
-    "space",
-    "psychology",
-    "business",
-    "history",
-    "engineering",
-    "future",
-    "discovery",
-    "world",
-    "mystery",
-    "other"
-
-}
-
-
-def normalize_category(
-    value
-):
-
-    if not isinstance(
-        value,
-        str
-    ):
-
-        return "other"
-
-    value = value.strip().lower()
-
-    if value in VALID_CATEGORIES:
-
-        return value
-
-    return "other"
-
-
-# =========================================================
-# TEXT BLOCK CHECK
-# =========================================================
-
-def contains_blocked_content(
-    topic
-):
-
-    if not topic:
-
-        return False
-
-    normalized = str(
-        topic
-    ).lower()
-
-    # Exact phrase checks
-    for phrase in HARD_BLOCK_PHRASES:
-
-        if phrase in normalized:
-
-            return True
-
-    # Keyword checks
-    words = re.findall(
-        r"\b[\w'-]+\b",
-        normalized
-    )
-
-    word_set = set(
-        words
-    )
-
-    for keyword in HARD_BLOCK_KEYWORDS:
-
-        if " " in keyword:
-
-            if keyword in normalized:
-
-                return True
-
-        else:
-
-            if keyword in word_set:
-
-                return True
-
-    return False
-
-
-# =========================================================
-# ENTITY QUALITY BOOST
-# =========================================================
-
-#
-# These are globally recognizable subjects.
-#
-# We do NOT use these to invent facts.
-# They only help prevent short global entities from being
-# unfairly scored as useless.
-#
-
-GLOBAL_ENTITIES = {
-
-    "nasa",
-    "spacex",
-    "tesla",
-    "apple",
-    "google",
-    "microsoft",
-    "amazon",
-    "openai",
-    "chatgpt",
-    "gemini",
-    "claude",
-    "meta",
-    "samsung",
-    "iphone",
-    "google pixel",
-    "bitcoin",
-    "ethereum",
-    "paypal",
-    "netflix",
-    "spotify",
-    "tiktok",
-    "instagram",
-    "youtube",
-    "mars",
-    "moon",
-    "james webb",
-    "james webb telescope",
-    "black hole",
-    "ai",
-    "artificial intelligence",
-    "climate change",
-    "titanic",
-    "roman empire",
-    "cold war",
-    "pompeii"
-
-}
-
-
-def is_global_entity(
-    topic
-):
-
-    normalized = re.sub(
-        r"\s+",
-        " ",
-        str(topic).strip().lower()
-    )
-
-    return normalized in GLOBAL_ENTITIES
-
-
-# =========================================================
-# CALCULATE SCORE
+# SCORE
 # =========================================================
 
 def calculate_score(
@@ -1138,10 +845,6 @@ def calculate_score(
         )
     )
 
-    # =====================================================
-    # WEIGHTS
-    # =====================================================
-
     score = (
 
         global_interest * 0.15
@@ -1160,7 +863,7 @@ def calculate_score(
 
         +
 
-        specificity * 0.15
+        specificity * 0.10
 
         +
 
@@ -1168,7 +871,7 @@ def calculate_score(
 
         +
 
-        originality * 0.10
+        originality * 0.15
 
     ) * 10
 
@@ -1194,7 +897,7 @@ def validate_result(
 
         return failed_result(
             original_topic,
-            "Invalid AI result"
+            "Invalid AI result."
         )
 
     # =====================================================
@@ -1204,28 +907,23 @@ def validate_result(
     result["topic"] = original_topic
 
     # =====================================================
-    # CATEGORY
-    # =====================================================
-
-    result["category"] = normalize_category(
-        result.get(
-            "category",
-            "other"
-        )
-    )
-
-    # =====================================================
     # NUMERIC FIELDS
     # =====================================================
 
     numeric_fields = [
 
         "global_interest",
+
         "viral_potential",
+
         "english_audience",
+
         "story_potential",
+
         "specificity",
+
         "factual_confidence",
+
         "originality"
 
     ]
@@ -1233,14 +931,53 @@ def validate_result(
     for field in numeric_fields:
 
         result[field] = normalize_number(
+
             result.get(
                 field,
                 0
             )
+
         )
 
     # =====================================================
-    # CALCULATE SCORE
+    # CATEGORY
+    # =====================================================
+
+    allowed_categories = {
+
+        "technology",
+        "ai",
+        "science",
+        "space",
+        "psychology",
+        "business",
+        "history",
+        "engineering",
+        "future",
+        "discovery",
+        "world",
+        "mystery",
+        "other"
+
+    }
+
+    category = str(
+
+        result.get(
+            "category",
+            "other"
+        )
+
+    ).strip().lower()
+
+    if category not in allowed_categories:
+
+        category = "other"
+
+    result["category"] = category
+
+    # =====================================================
+    # SCORE
     # =====================================================
 
     result["score"] = calculate_score(
@@ -1248,7 +985,23 @@ def validate_result(
     )
 
     # =====================================================
-    # HARD RULES
+    # HARD BLOCK
+    # =====================================================
+
+    blocked = hard_block_reason(
+        original_topic
+    )
+
+    if blocked:
+
+        result["is_good_for_shorts"] = False
+
+        result["reason"] = blocked
+
+        return result
+
+    # =====================================================
+    # APPROVAL
     # =====================================================
 
     approved = True
@@ -1262,108 +1015,59 @@ def validate_result(
         approved = False
 
     # -----------------------------------------------------
+    # STORY
+    # -----------------------------------------------------
+
+    if (
+        result["story_potential"]
+        < MIN_STORY_POTENTIAL
+    ):
+
+        approved = False
+
+    # -----------------------------------------------------
+    # FACTS
+    # -----------------------------------------------------
+
+    if (
+        result["factual_confidence"]
+        < MIN_FACTUAL_CONFIDENCE
+    ):
+
+        approved = False
+
+    # -----------------------------------------------------
     # SPECIFICITY
+    #
+    # V8 allows short trend titles.
+    #
     # -----------------------------------------------------
 
-    if result["specificity"] < MIN_SPECIFICITY:
-
-        approved = False
-
-    # -----------------------------------------------------
-    # FACTUAL CONFIDENCE
-    # -----------------------------------------------------
-
-    if result["factual_confidence"] < MIN_FACTUAL_CONFIDENCE:
-
-        approved = False
-
-    # -----------------------------------------------------
-    # STORY POTENTIAL
-    # -----------------------------------------------------
-
-    if result["story_potential"] < MIN_STORY_POTENTIAL:
-
-        approved = False
-
-    # -----------------------------------------------------
-    # GLOBAL INTEREST
-    # -----------------------------------------------------
-
-    if result["global_interest"] < MIN_GLOBAL_INTEREST:
-
-        approved = False
-
-    # -----------------------------------------------------
-    # ENGLISH AUDIENCE
-    # -----------------------------------------------------
-
-    if result["english_audience"] < MIN_ENGLISH_AUDIENCE:
-
-        approved = False
-
-    # -----------------------------------------------------
-    # ORIGINALITY
-    # -----------------------------------------------------
-
-    if result["originality"] < MIN_ORIGINALITY:
-
-        approved = False
-
-    # =====================================================
-    # HARD CONTENT BLOCK
-    # =====================================================
-
-    if contains_blocked_content(
-        original_topic
+    if (
+        result["specificity"]
+        < MIN_SPECIFICITY
     ):
 
         approved = False
 
-        result["reason"] = (
-            "Rejected by hard content filter: "
-            "gaming, music, entertainment, "
-            "sports match, trailer, or fan content."
-        )
-
     # =====================================================
-    # GLOBAL ENTITY SAFETY NET
+    # ADDITIONAL QUALITY RULE
     # =====================================================
-
     #
-    # Important:
-    #
-    # If Gemini gives a globally important entity reasonable
-    # scores, do not artificially reject it merely because
-    # the title is short.
-    #
-    # We still respect the factual/story requirements.
+    # A topic with very low global relevance should not
+    # pass merely because other values are high.
     #
 
-    if is_global_entity(
-        original_topic
+    if (
+        result["global_interest"] < 4
+        and
+        result["english_audience"] < 5
     ):
 
-        if (
-            result["global_interest"] >= 7
-            and
-            result["english_audience"] >= 7
-            and
-            result["factual_confidence"] >= 6
-            and
-            result["story_potential"] >= 5
-            and
-            result["originality"] >= 5
-        ):
-
-            # Specificity floor for recognized entities
-            if result["specificity"] >= 4:
-
-                if result["score"] >= 55:
-
-                    approved = True
+        approved = False
 
     # =====================================================
-    # DO NOT TRUST GEMINI BOOLEAN
+    # FINAL BOOLEAN
     # =====================================================
 
     result["is_good_for_shorts"] = approved
@@ -1372,103 +1076,304 @@ def validate_result(
 
 
 # =========================================================
-# MATCH RESULTS TO TOPICS
+# EXTRACT JSON ARRAY
 # =========================================================
 
-def match_results_to_topics(
-    topics,
-    data
+def extract_json_array(
+    text
 ):
 
-    if not isinstance(
-        data,
-        list
-    ):
+    if not text:
 
-        raise ValueError(
-            "Gemini response is not a list"
-        )
+        return None
+
+    text = text.strip()
 
     # -----------------------------------------------------
-    # Normal case
+    # Remove code fences
     # -----------------------------------------------------
 
-    if len(data) == len(topics):
-
-        return data
-
-    # -----------------------------------------------------
-    # If Gemini accidentally returned fewer items
-    # -----------------------------------------------------
-
-    print(
-        f"⚠️ Gemini returned "
-        f"{len(data)} results for "
-        f"{len(topics)} topics"
+    text = re.sub(
+        r"^```(?:json)?\s*",
+        "",
+        text,
+        flags=re.IGNORECASE
     )
 
-    results = []
+    text = re.sub(
+        r"\s*```$",
+        "",
+        text
+    )
 
-    used_indexes = set()
+    text = text.strip()
 
     # -----------------------------------------------------
-    # Try exact topic matching first
+    # Direct parse
     # -----------------------------------------------------
+
+    try:
+
+        data = json.loads(
+            text
+        )
+
+        if isinstance(
+            data,
+            list
+        ):
+
+            return data
+
+    except Exception:
+
+        pass
+
+    # -----------------------------------------------------
+    # Find array boundaries
+    # -----------------------------------------------------
+
+    start = text.find(
+        "["
+    )
+
+    end = text.rfind(
+        "]"
+    )
+
+    if (
+        start == -1
+        or
+        end == -1
+        or
+        end <= start
+    ):
+
+        return None
+
+    candidate = text[
+        start:end + 1
+    ]
+
+    # -----------------------------------------------------
+    # Try direct candidate
+    # -----------------------------------------------------
+
+    try:
+
+        data = json.loads(
+            candidate
+        )
+
+        if isinstance(
+            data,
+            list
+        ):
+
+            return data
+
+    except Exception:
+
+        pass
+
+    # -----------------------------------------------------
+    # Common Gemini JSON repairs
+    # -----------------------------------------------------
+
+    repaired = candidate
+
+    # Remove trailing commas
+    repaired = re.sub(
+        r",\s*([}\]])",
+        r"\1",
+        repaired
+    )
+
+    # Replace Python booleans
+    repaired = re.sub(
+        r"\bTrue\b",
+        "true",
+        repaired
+    )
+
+    repaired = re.sub(
+        r"\bFalse\b",
+        "false",
+        repaired
+    )
+
+    repaired = re.sub(
+        r"\bNone\b",
+        "null",
+        repaired
+    )
+
+    try:
+
+        data = json.loads(
+            repaired
+        )
+
+        if isinstance(
+            data,
+            list
+        ):
+
+            return data
+
+    except Exception:
+
+        pass
+
+    return None
+
+
+# =========================================================
+# GEMINI REQUEST
+# =========================================================
+
+def request_gemini(
+    prompt
+):
+
+    response = client.models.generate_content(
+
+        model=MODEL_NAME,
+
+        contents=prompt,
+
+        config=types.GenerateContentConfig(
+
+            temperature=0.15,
+
+            response_mime_type="application/json"
+
+        )
+
+    )
+
+    if not response:
+
+        return ""
+
+    text = getattr(
+        response,
+        "text",
+        None
+    )
+
+    if not text:
+
+        return ""
+
+    return text.strip()
+
+
+# =========================================================
+# PREPARE TOPICS
+# =========================================================
+
+def prepare_topics(
+    topics
+):
+
+    cleaned = []
+
+    seen = set()
 
     for topic in topics:
 
-        matched = None
+        topic = normalize_topic(
+            topic
+        )
 
-        for index, item in enumerate(
-            data
-        ):
+        if not topic:
 
-            if index in used_indexes:
+            continue
 
-                continue
+        key = topic.lower()
 
-            if not isinstance(
-                item,
-                dict
-            ):
+        if key in seen:
 
-                continue
+            continue
 
-            candidate = item.get(
-                "topic",
-                ""
-            )
+        seen.add(
+            key
+        )
 
-            if candidate == topic:
+        cleaned.append(
+            topic
+        )
 
-                matched = item
-
-                used_indexes.add(
-                    index
-                )
-
-                break
-
-        if matched is None:
-
-            results.append(
-                failed_result(
-                    topic,
-                    "Missing AI result"
-                )
-            )
-
-        else:
-
-            results.append(
-                matched
-            )
-
-    return results
+    return cleaned
 
 
 # =========================================================
-# GEMINI BATCH
+# BUILD PROMPT
+# =========================================================
+
+def build_prompt(
+    topics
+):
+
+    topics_text = "\n".join(
+
+        f"{index + 1}. {topic}"
+
+        for index, topic
+        in enumerate(
+            topics
+        )
+
+    )
+
+    prompt = f"""
+{SYSTEM_PROMPT}
+
+=========================================================
+CURRENT BATCH
+=========================================================
+
+There are EXACTLY {len(topics)} input topics.
+
+Analyze EVERY topic.
+
+Return EXACTLY {len(topics)} objects.
+
+The order MUST remain identical.
+
+Do NOT remove topics.
+
+Do NOT merge topics.
+
+Do NOT rewrite topics.
+
+Preserve every topic exactly.
+
+=========================================================
+TOPICS
+=========================================================
+
+{topics_text}
+
+=========================================================
+FINAL REMINDER
+=========================================================
+
+Return ONLY a valid JSON array.
+
+No markdown.
+
+No explanation outside JSON.
+
+Exactly one object per topic.
+"""
+
+    return prompt
+
+
+# =========================================================
+# JUDGE BATCH
 # =========================================================
 
 def judge_batch(
@@ -1482,171 +1387,256 @@ def judge_batch(
         f"{batch_number}/{total_batches}"
     )
 
-    topics_text = "\n".join(
+    # =====================================================
+    # HARD BLOCK BEFORE GEMINI
+    # =====================================================
 
-        f"{index + 1}. {topic}"
+    hard_blocked = {}
 
-        for index, topic
-        in enumerate(topics)
+    ai_topics = []
 
-    )
+    for topic in topics:
 
-    prompt = f"""
-{SYSTEM_PROMPT}
-
-========================================================
-INPUT TOPICS
-========================================================
-
-Analyze ALL topics below.
-
-There are exactly {len(topics)} topics.
-
-TOPICS:
-
-{topics_text}
-
-========================================================
-STRICT OUTPUT REQUIREMENTS
-========================================================
-
-Return exactly {len(topics)} JSON objects.
-
-The order MUST be identical to the input order.
-
-Do not remove any topic.
-
-Do not merge topics.
-
-Do not rewrite topics.
-
-Preserve every original topic exactly.
-
-Return ONLY the JSON array.
-"""
-
-    try:
-
-        response = client.models.generate_content(
-
-            model=MODEL_NAME,
-
-            contents=prompt
-
+        reason = hard_block_reason(
+            topic
         )
 
-        text = response.text
+        if reason:
 
-        if not text:
-
-            print(
-                "⚠️ Gemini returned empty response"
+            hard_blocked[
+                topic
+            ] = hard_block_result(
+                topic,
+                reason
             )
 
-            return [
+        else:
 
+            ai_topics.append(
+                topic
+            )
+
+    print(
+        f"🚫 Hard-block candidates: "
+        f"{len(hard_blocked)}"
+    )
+
+    results_map = {}
+
+    # =====================================================
+    # HARD BLOCK ONLY BATCH
+    # =====================================================
+
+    if not ai_topics:
+
+        return [
+
+            hard_blocked.get(
+                topic,
                 failed_result(
-                    topic,
-                    "Empty Gemini response"
+                    topic
                 )
+            )
 
-                for topic in topics
+            for topic in topics
 
-            ]
+        ]
 
-        text = clean_json(
-            text
-        )
+    # =====================================================
+    # GEMINI RETRIES
+    # =====================================================
+
+    for attempt in range(
+        1,
+        MAX_RETRIES + 1
+    ):
 
         try:
 
-            data = json.loads(
-                text
+            prompt = build_prompt(
+                ai_topics
             )
 
-        except json.JSONDecodeError as error:
+            raw_text = request_gemini(
+                prompt
+            )
+
+            if not raw_text:
+
+                raise ValueError(
+                    "Empty Gemini response"
+                )
+
+            data = extract_json_array(
+                raw_text
+            )
+
+            if data is None:
+
+                print(
+                    "⚠️ JSON decode error:"
+                )
+
+                print(
+                    "Gemini raw response:"
+                )
+
+                print(
+                    raw_text
+                )
+
+                raise ValueError(
+                    "Could not parse Gemini JSON"
+                )
+
+            # =================================================
+            # MAP RESULTS
+            # =================================================
+
+            for index, topic in enumerate(
+                ai_topics
+            ):
+
+                if index >= len(data):
+
+                    continue
+
+                result = data[index]
+
+                if not isinstance(
+                    result,
+                    dict
+                ):
+
+                    continue
+
+                validated = validate_result(
+                    result,
+                    topic
+                )
+
+                results_map[
+                    topic
+                ] = validated
+
+            # =================================================
+            # SUCCESS
+            # =================================================
+
+            missing = [
+
+                topic
+
+                for topic in ai_topics
+
+                if topic
+                not in results_map
+
+            ]
+
+            if missing:
+
+                print(
+                    f"⚠️ Gemini returned "
+                    f"{len(missing)} missing results"
+                )
+
+                if attempt < MAX_RETRIES:
+
+                    time.sleep(
+                        RETRY_DELAY
+                    )
+
+                    continue
+
+                for topic in missing:
+
+                    results_map[
+                        topic
+                    ] = failed_result(
+                        topic,
+                        "Missing AI result"
+                    )
+
+            break
+
+        except Exception as error:
+
+            print()
 
             print(
-                "⚠️ JSON decode error:"
+                f"⚠️ Gemini V8 attempt "
+                f"{attempt}/{MAX_RETRIES} failed:"
             )
 
             print(
                 str(error)
             )
 
-            print(
-                "Gemini raw response:"
-            )
+            print()
 
-            print(
-                text[:3000]
-            )
+            if attempt < MAX_RETRIES:
 
-            return [
-
-                failed_result(
-                    topic,
-                    "Invalid Gemini JSON"
+                print(
+                    f"🔄 Retrying in "
+                    f"{RETRY_DELAY}s..."
                 )
 
-                for topic in topics
-
-            ]
-
-        data = match_results_to_topics(
-            topics,
-            data
-        )
-
-        results = []
-
-        for index, topic in enumerate(
-            topics
-        ):
-
-            if index < len(data):
-
-                result = data[index]
+                time.sleep(
+                    RETRY_DELAY
+                )
 
             else:
 
-                result = failed_result(
-                    topic,
-                    "Missing AI result"
+                print(
+                    "❌ Gemini batch permanently failed"
                 )
 
-            result = validate_result(
-                result,
-                topic
-            )
+                for topic in ai_topics:
+
+                    if topic not in results_map:
+
+                        results_map[
+                            topic
+                        ] = failed_result(
+                            topic,
+                            "Gemini request failed"
+                        )
+
+    # =====================================================
+    # FINAL ORDER
+    # =====================================================
+
+    results = []
+
+    for topic in topics:
+
+        if topic in hard_blocked:
 
             results.append(
-                result
+                hard_blocked[
+                    topic
+                ]
             )
 
-        return results
+        elif topic in results_map:
 
-    except Exception as error:
-
-        print()
-        print(
-            "⚠️ Gemini V8 batch error:"
-        )
-        print(
-            str(error)
-        )
-        print()
-
-        return [
-
-            failed_result(
-                topic,
-                "Gemini request failed"
+            results.append(
+                results_map[
+                    topic
+                ]
             )
 
-            for topic in topics
+        else:
 
-        ]
+            results.append(
+                failed_result(
+                    topic,
+                    "No result generated"
+                )
+            )
+
+    return results
 
 
 # =========================================================
@@ -1658,20 +1648,24 @@ def judge_topics(
 ):
 
     print()
+
     print(
         "================================"
     )
+
     print(
         "🤖 AI TREND JUDGE V8"
     )
+
     print(
         "================================"
     )
+
     print()
 
-    # =====================================================
-    # VALIDATE INPUT
-    # =====================================================
+    topics = prepare_topics(
+        topics
+    )
 
     if not topics:
 
@@ -1681,99 +1675,20 @@ def judge_topics(
 
         return []
 
-    # -----------------------------------------------------
-    # Remove invalid values
-    # -----------------------------------------------------
-
-    clean_topics = []
-
-    for topic in topics:
-
-        if not isinstance(
-            topic,
-            str
-        ):
-
-            continue
-
-        topic = topic.strip()
-
-        if not topic:
-
-            continue
-
-        clean_topics.append(
-            topic
-        )
-
-    # -----------------------------------------------------
-    # Remove duplicates while preserving order
-    # -----------------------------------------------------
-
-    unique_topics = []
-
-    seen = set()
-
-    for topic in clean_topics:
-
-        key = topic.lower()
-
-        if key in seen:
-
-            continue
-
-        seen.add(
-            key
-        )
-
-        unique_topics.append(
-            topic
-        )
-
-    topics = unique_topics
-
     print(
         f"📊 Topics for AI Judge: "
         f"{len(topics)}"
     )
 
+    print(
+        f"🎯 Target approved topics: "
+        f"{TARGET_APPROVED}"
+    )
+
     print()
 
-    if not topics:
-
-        return []
-
     # =====================================================
-    # LOCAL PRE-FILTER
-    # =====================================================
-
-    #
-    # We still send blocked topics to Gemini so that the
-    # output remains exactly aligned, but they are guaranteed
-    # to be rejected afterwards.
-    #
-
-    blocked_count = 0
-
-    for topic in topics:
-
-        if contains_blocked_content(
-            topic
-        ):
-
-            blocked_count += 1
-
-    if blocked_count:
-
-        print(
-            f"🚫 Hard-block candidates: "
-            f"{blocked_count}"
-        )
-
-        print()
-
-    # =====================================================
-    # SPLIT INTO BATCHES
+    # SPLIT BATCHES
     # =====================================================
 
     batches = [
@@ -1794,18 +1709,15 @@ def judge_topics(
         batches
     )
 
-    # =====================================================
-    # PROCESS BATCHES
-    # =====================================================
-
     results = []
 
+    # =====================================================
+    # PROCESS
+    # =====================================================
+
     for batch_index, batch in enumerate(
-
         batches,
-
         start=1
-
     ):
 
         batch_results = judge_batch(
@@ -1822,47 +1734,11 @@ def judge_topics(
             batch_results
         )
 
-        # =================================================
-        # DELAY
-        # =================================================
-
         if batch_index < total_batches:
 
             time.sleep(
                 3
             )
-
-    # =====================================================
-    # FINAL HARD VALIDATION
-    # =====================================================
-
-    final_results = []
-
-    for index, topic in enumerate(
-        topics
-    ):
-
-        if index < len(results):
-
-            result = results[index]
-
-        else:
-
-            result = failed_result(
-                topic,
-                "Missing final result"
-            )
-
-        result = validate_result(
-            result,
-            topic
-        )
-
-        final_results.append(
-            result
-        )
-
-    results = final_results
 
     # =====================================================
     # SORT
@@ -1871,6 +1747,7 @@ def judge_topics(
     results.sort(
 
         key=lambda item:
+
             item.get(
                 "score",
                 0
@@ -1881,37 +1758,35 @@ def judge_topics(
     )
 
     # =====================================================
-    # PRINT RESULTS
+    # DISPLAY
     # =====================================================
 
     print()
+
     print(
         "================================"
     )
+
     print(
-        "🤖 AI JUDGE V8 RESULTS"
+        "🤖 AI JUDGE RESULTS"
     )
+
     print(
         "================================"
     )
+
     print()
 
     approved_count = 0
 
     for index, result in enumerate(
-
         results,
-
         start=1
-
     ):
 
         approved = result.get(
-
             "is_good_for_shorts",
-
             False
-
         )
 
         if approved:
@@ -1991,56 +1866,62 @@ def judge_topics(
 
         print()
 
-    print(
-        f"✅ AI approved: "
-        f"{approved_count}/{len(results)}"
-    )
+    # =====================================================
+    # APPROVED
+    # =====================================================
 
-    print()
+    approved = [
 
-    return results
+        result
 
+        for result in results
 
-# =========================================================
-# OPTIONAL DIRECT TEST
-# =========================================================
-
-if __name__ == "__main__":
-
-    test_topics = [
-
-        "HOME ALONE",
-        "Google Pixel",
-        "NASA",
-        "OpenAI",
-        "Tesla",
-        "Minecraft gameplay",
-        "That Way",
-        "Pop Off Pop Off",
-        "Big Walk",
-        "Spotify changes royalty system"
+        if result.get(
+            "is_good_for_shorts",
+            False
+        )
 
     ]
 
-    results = judge_topics(
-        test_topics
-    )
+    # =====================================================
+    # TOP TARGET
+    # =====================================================
 
-    print()
-    print(
-        "================================"
-    )
-    print(
-        "🧪 TEST COMPLETE"
-    )
-    print(
-        "================================"
-    )
+    approved = approved[
+        :TARGET_APPROVED
+    ]
+
+    # =====================================================
+    # SUMMARY
+    # =====================================================
 
     print(
-        json.dumps(
-            results,
-            ensure_ascii=False,
-            indent=2
+        f"✅ AI approved: "
+        f"{len(approved)}/{len(results)}"
+    )
+
+    print(
+        f"🎯 Target: "
+        f"{TARGET_APPROVED}"
+    )
+
+    if len(approved) < TARGET_APPROVED:
+
+        print(
+            f"⚠️ Only "
+            f"{len(approved)} topics approved."
         )
-    )
+
+        print(
+            "💡 Consider increasing the number "
+            "of input trends."
+        )
+
+    else:
+
+        print(
+            f"🔥 Target reached: "
+            f"{len(approved)} topics"
+        )
+
+    return approved
