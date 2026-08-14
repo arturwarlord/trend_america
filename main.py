@@ -77,7 +77,15 @@ def main():
         :AI_INPUT_LIMIT
     ]
 
-    topics = []
+    topics = [
+
+        trend["topic"]
+    
+        for trend in analyzed_trends[:60]
+    
+        if trend.get("topic")
+    
+    ]
 
     for trend in candidates:
 
