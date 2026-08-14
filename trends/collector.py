@@ -46,6 +46,53 @@ COUNTRIES = [
 ]
 
 
+def normalize_topic(trend):
+    """
+    Создаёт единый формат тренда.
+
+    Важно:
+    не меняем оригинальный title,
+    а сохраняем дополнительные поля.
+    """
+
+    title = str(
+        trend.get("title")
+        or trend.get("topic")
+        or trend.get("query")
+        or ""
+    ).strip()
+
+    source = str(
+        trend.get("source")
+        or trend.get("type")
+        or ""
+    ).lower()
+
+    return {
+        **trend,
+
+        "title": title,
+        "topic": title,
+
+        "source": source,
+
+        "views": trend.get(
+            "views",
+            0
+        ),
+
+        "country": trend.get(
+            "country",
+            ""
+        ),
+
+        "country_name": trend.get(
+            "country_name",
+            ""
+        )
+    }
+
+
 def collect_trends():
 
     print()
@@ -68,37 +115,103 @@ def collect_trends():
         )
         print("--------------------------------")
 
-        # ==========================
+        # ==================================================
         # GOOGLE TRENDS
-        # ==========================
+        # ==================================================
 
-        google = get_google_trends(
-            country=code,
-            limit=20
+        print(
+            f"🌍 Google Trends: {code}"
+        )
+
+        try:
+
+            google = get_google_trends(
+                country=code,
+                limit=20
+            )
+
+        except Exception as error:
+
+            print(
+                f"⚠️ Google Trends error: {error}"
+            )
+
+            google = []
+
+        print(
+            f"   Google: {len(google)}"
         )
 
         for trend in google:
 
+            trend = normalize_topic(
+                trend
+            )
+
             trend["country"] = code
             trend["country_name"] = name
 
-            all_trends.append(trend)
+            trend["source"] = "google"
 
-        # ==========================
+            all_trends.append(
+                trend
+            )
+
+        # ==================================================
         # YOUTUBE TRENDS
-        # ==========================
+        # ==================================================
 
-        youtube = get_youtube_trends(
-            region=code,
-            limit=20
+        print(
+            f"📺 YouTube Trends: {code}"
+        )
+
+        try:
+
+            youtube = get_youtube_trends(
+                region=code,
+                limit=20
+            )
+
+        except Exception as error:
+
+            print(
+                f"⚠️ YouTube Trends error: {error}"
+            )
+
+            youtube = []
+
+        print(
+            f"   YouTube: {len(youtube)}"
         )
 
         for trend in youtube:
 
+            trend = normalize_topic(
+                trend
+            )
+
             trend["country"] = code
             trend["country_name"] = name
 
-            all_trends.append(trend)
+            trend["source"] = "youtube"
+
+            all_trends.append(
+                trend
+            )
+
+    # ==================================================
+    # REMOVE EMPTY TOPICS
+    # ==================================================
+
+    all_trends = [
+        trend
+        for trend in all_trends
+        if trend.get("title")
+    ]
+
+    # ==================================================
+    # COLLECTION COMPLETE
+    # ==================================================
 
     print()
     print("================================")
