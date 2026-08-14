@@ -1,33 +1,22 @@
-from dotenv import load_dotenv
-
-from trends.collector import (
-    collect_trends
-)
-
-from trends.storage import (
-    save_trends
-)
+from trends.collector import collect_trends
+from trends.storage import save_trends
 
 
 def main():
 
-    print(
-        "\n"
-        "🚀 YouTube Global Shorts"
-        "\n"
-    )
+    print()
+    print("================================")
+    print("🌍 GLOBAL TREND ENGINE")
+    print("================================")
+    print()
 
     trends = collect_trends()
 
-    save_trends(
-        trends
-    )
+    save_trends(trends)
 
-    print(
-        "\n"
-        "✅ Trend Engine завершён"
-        "\n"
-    )
+    print()
+    print("✅ Trend scan completed")
+    print()
 
 
 if __name__ == "__main__":
