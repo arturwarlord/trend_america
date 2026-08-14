@@ -10,6 +10,11 @@ from trends.content_filter import (
 
 
 INPUT_FILE = "data/trend_candidates.json"
+
+# TOP 30 после математического анализа
+ANALYZED_FILE = "data/analyzed_trends.json"
+
+# Финальный файл для AI-approved трендов
 OUTPUT_FILE = "data/top_trends.json"
 
 
@@ -104,7 +109,6 @@ def similarity(
     )
 
     if not keywords_a or not keywords_b:
-
         return 0
 
     intersection = (
@@ -116,7 +120,6 @@ def similarity(
     )
 
     if not union:
-
         return 0
 
     keyword_similarity = (
@@ -255,7 +258,6 @@ def calculate_score(
         )
 
         if country:
-
             countries.add(
                 country
             )
@@ -494,7 +496,6 @@ def analyze_trends(
         )
 
         if not topic:
-
             continue
 
         if is_relevant(
@@ -565,14 +566,14 @@ def analyze_trends(
     )
 
     # ======================================
-    # TOP 10
+    # TOP 30
     # ======================================
 
     top_trends = analyzed[:30]
 
     print()
     print("================================")
-    print("🔥 TOP GLOBAL TRENDS")
+    print("🔥 TOP 30 GLOBAL TRENDS")
     print("================================")
     print()
 
@@ -627,7 +628,39 @@ def analyze_trends(
 
 
 # ==========================================
-# SAVE TOP TRENDS
+# SAVE ANALYZED TOP 30
+# ==========================================
+
+def save_analyzed_trends(
+    trends
+):
+
+    os.makedirs(
+        "data",
+        exist_ok=True
+    )
+
+    with open(
+        ANALYZED_FILE,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        json.dump(
+            trends,
+            file,
+            ensure_ascii=False,
+            indent=2
+        )
+
+    print()
+    print(
+        f"💾 Saved: {ANALYZED_FILE}"
+    )
+
+
+# ==========================================
+# SAVE AI APPROVED TRENDS
 # ==========================================
 
 def save_top_trends(
