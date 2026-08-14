@@ -81,3 +81,15 @@ jobs:
           path: data/global_trends.json
 
           retention-days: 7
+
+      - name: Upload analyzed trends
+
+        uses: actions/upload-artifact@v4
+
+        with:
+
+          name: top-trends
+
+          path: data/top_trends.json
+
+          retention-days: 7
