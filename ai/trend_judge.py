@@ -18,27 +18,26 @@ MODEL_NAME = "gemini-flash-lite-latest"
 
 
 # ==========================================
-# SYSTEM PROMPT V4
+# SYSTEM PROMPT
 # ==========================================
 
 SYSTEM_PROMPT = """
 You are an expert global YouTube Shorts trend analyst.
 
-Your job is to evaluate trending topics and determine whether
-each topic can become an ORIGINAL English YouTube Short for
-a GLOBAL audience.
+Your job is to evaluate trending topics for ORIGINAL
+English YouTube Shorts for a GLOBAL audience.
 
-The goal is NOT simply to find popular searches.
+We are NOT making videos about the original content.
 
-The goal is to find topics that contain a REAL, SPECIFIC,
-INTERESTING STORY or FACT that can become a compelling
-30-60 second informational Short.
+We are looking for an underlying REAL story, fact,
+event, discovery, technology, history, science,
+business story or unusual real-world phenomenon.
 
 ==========================================
-GOOD TOPICS
+APPROVE
 ==========================================
 
-Prefer:
+Good categories:
 
 - artificial intelligence
 - technology
@@ -60,7 +59,7 @@ Prefer:
 - mysteries with factual basis
 
 ==========================================
-BAD TOPICS
+REJECT
 ==========================================
 
 Reject:
@@ -69,6 +68,10 @@ Reject:
 - gaming
 - esports
 - gaming tournaments
+- gameplay
+- Minecraft
+- Roblox
+- GTA
 - music videos
 - songs
 - albums
@@ -80,81 +83,43 @@ Reject:
 - sports matches
 - sports highlights
 - random people's names
-- random search queries
 - generic product searches
 - local events
 - fan content
 - reaction videos
 - livestreams
-- gameplay
 - fictional characters
-- memes without a story
+- memes without a real-world story
 
 ==========================================
-VERY IMPORTANT
+IMPORTANT
 ==========================================
 
-A topic must contain enough SPECIFIC INFORMATION
-to build a factual story.
+Do NOT invent facts.
+
+Judge ONLY what the topic itself reasonably supports.
+
+A vague keyword must be rejected.
 
 Examples:
 
 "google pixel"
-= BAD
-
-Reason:
-Too broad. It is only a product/search term.
+BAD
 
 "Google Pixel introduces satellite messaging"
-= GOOD
-
-Reason:
-Specific technological development with a clear story.
+GOOD
 
 "ticketmaster"
-= BAD
-
-Reason:
-Generic company/search query.
+BAD
 
 "Ticketmaster changes its pricing system"
-= GOOD
-
-Reason:
-Specific business development.
+GOOD
 
 "avgo stock"
-= BAD
-
-Reason:
-Generic financial search query.
+BAD
 
 "Broadcom's AI chip business drives unexpected growth"
-= GOOD
-
-Reason:
-Specific business/technology story.
-
-==========================================
-DO NOT INVENT INFORMATION
-==========================================
-
-Judge ONLY what the topic itself reasonably supports.
-
-Do NOT assume missing details.
-
-Do NOT transform a vague keyword into a specific event.
-
-For example:
-
-"Army Sir Split The Village into Half.."
-
-may sound interesting, but if the exact event,
-location, people and context are unclear,
-reduce factual confidence and specificity.
-
-A potentially interesting topic is NOT automatically
-a good topic.
+GOOD
 
 ==========================================
 GLOBAL AUDIENCE
@@ -162,20 +127,20 @@ GLOBAL AUDIENCE
 
 The topic should work for an English-speaking global audience.
 
-Prefer topics that can be understood without:
+Prefer topics that do not require:
 
 - local political knowledge
 - local language
-- knowledge of a specific influencer
+- knowledge of influencers
 - knowledge of a specific game
-- knowledge of a specific TV show
-- knowledge of a specific music artist
+- knowledge of a TV show
+- knowledge of a music artist
 
 ==========================================
-STORY POTENTIAL
+SHORTS STORY
 ==========================================
 
-A strong Short topic should allow:
+A good topic should naturally support:
 
 HOOK
 → surprising fact
@@ -183,7 +148,7 @@ HOOK
 → escalation
 → payoff
 
-The viewer should naturally want to know:
+The viewer should naturally ask:
 
 "What happened?"
 "Why?"
@@ -191,30 +156,8 @@ The viewer should naturally want to know:
 "What does this mean?"
 
 ==========================================
-ORIGINALITY
-==========================================
-
-We are creating an ORIGINAL educational/informational Short.
-
-Do not approve topics simply because the original video
-has many views.
-
-A viral music video is still BAD.
-
-A viral gaming video is still BAD.
-
-A viral movie trailer is still BAD.
-
-A viral livestream is still BAD.
-
-We need the underlying real-world story,
-not a reproduction of the original content.
-
-==========================================
 SCORING
 ==========================================
-
-Score every topic using:
 
 global_interest: 0-10
 viral_potential: 0-10
@@ -224,7 +167,9 @@ specificity: 0-10
 factual_confidence: 0-10
 originality: 0-10
 
-Calculate:
+Calculate score from these factors.
+
+Approximate weighting:
 
 global_interest       15%
 viral_potential       15%
@@ -234,48 +179,31 @@ specificity           15%
 factual_confidence    15%
 originality           10%
 
-Convert the result to score 0-100.
-
 ==========================================
-DECISION RULES
+STRICT APPROVAL
 ==========================================
 
-is_good_for_shorts = TRUE only when:
+is_good_for_shorts = true ONLY when:
 
-- the topic is suitable for a global English audience
-- it has a clear story or factual angle
-- it is specific enough
-- it can be turned into an original Short
-- it does not require copying the original content
+- clear real-world story or fact exists
+- topic is specific enough
+- global English audience can understand it
+- original educational Short is possible
 - factual confidence is reasonably high
+- topic is not in the rejected categories
 
-If the topic is only a keyword or generic search query,
+If the topic is vague, reject it.
+
+If the topic is only a keyword, reject it.
+
+If the topic is interesting but lacks factual specificity,
 reject it.
-
-If the topic is interesting but too vague,
-reject it.
-
-Hard reject if:
-
-specificity < 5
-
-OR
-
-factual_confidence < 5
-
-OR
-
-story_potential < 5
-
-OR
-
-score < 60
 
 ==========================================
 CATEGORY
 ==========================================
 
-Use exactly one:
+Use one:
 
 technology
 ai
@@ -295,24 +223,22 @@ other
 OUTPUT
 ==========================================
 
-You will receive MULTIPLE topics.
+Return ONLY valid JSON.
 
-Analyze ALL topics.
+Return an ARRAY.
 
-Return ONLY a valid JSON ARRAY.
+No markdown.
 
-Do not use markdown.
+No ```.
 
-Do not use ```.
+No explanation outside JSON.
 
-Do not add explanations outside JSON.
-
-Every array element must have exactly this structure:
+Each object MUST contain:
 
 {
-    "topic": "original topic",
-    "is_good_for_shorts": false,
-    "category": "other",
+    "topic": "...",
+    "is_good_for_shorts": true,
+    "category": "technology",
 
     "global_interest": 0,
     "viral_potential": 0,
@@ -326,19 +252,11 @@ Every array element must have exactly this structure:
 
     "reason": "short explanation"
 }
-
-IMPORTANT:
-
-Return one result for EVERY input topic.
-
-Do not omit topics.
-
-Keep the original topic text exactly as provided.
 """
 
 
 # ==========================================
-# CLEAN JSON
+# JSON CLEANER
 # ==========================================
 
 def clean_json(text):
@@ -348,36 +266,33 @@ def clean_json(text):
 
     text = text.strip()
 
-    # Remove markdown code fences
-    text = re.sub(
-        r"^```(?:json)?\s*",
-        "",
-        text,
-        flags=re.IGNORECASE
-    )
+    if text.startswith("```"):
 
-    text = re.sub(
-        r"\s*```$",
-        "",
-        text
-    )
+        text = re.sub(
+            r"^```(?:json)?",
+            "",
+            text,
+            flags=re.IGNORECASE
+        )
 
-    text = text.strip()
+        text = re.sub(
+            r"```$",
+            "",
+            text
+        )
 
-    return text
+    return text.strip()
 
 
 # ==========================================
-# DEFAULT RESULT
+# FAILED RESULT
 # ==========================================
 
-def failed_result(topic, reason="AI Judge failed"):
+def failed_result(topic):
 
     return {
         "topic": topic,
-
         "is_good_for_shorts": False,
-
         "category": "other",
 
         "global_interest": 0,
@@ -390,29 +305,20 @@ def failed_result(topic, reason="AI Judge failed"):
 
         "score": 0,
 
-        "reason": reason
+        "reason": "AI Judge failed"
     }
 
 
 # ==========================================
-# NORMALIZE RESULT
+# VALIDATE RESULT
 # ==========================================
 
-def normalize_result(
-    result,
-    topic
-):
+def validate_result(result, topic):
 
-    if not isinstance(
-        result,
-        dict
-    ):
+    if not isinstance(result, dict):
 
-        return failed_result(
-            topic
-        )
+        return failed_result(topic)
 
-    # Always preserve original topic
     result["topic"] = topic
 
     numeric_fields = [
@@ -433,32 +339,13 @@ def normalize_result(
         try:
 
             value = float(
-                result.get(
-                    field,
-                    0
-                )
+                result.get(field, 0)
             )
 
-            # Keep values in valid range
-            if field == "score":
-
-                value = max(
-                    0,
-                    min(
-                        100,
-                        value
-                    )
-                )
-
-            else:
-
-                value = max(
-                    0,
-                    min(
-                        10,
-                        value
-                    )
-                )
+            value = max(
+                0,
+                min(value, 100 if field == "score" else 10)
+            )
 
             result[field] = value
 
@@ -467,51 +354,7 @@ def normalize_result(
             result[field] = 0
 
     # ======================================
-    # CATEGORY
-    # ======================================
-
-    allowed_categories = {
-
-        "technology",
-        "ai",
-        "science",
-        "space",
-        "psychology",
-        "business",
-        "history",
-        "engineering",
-        "future",
-        "discovery",
-        "world",
-        "mystery",
-        "other"
-
-    }
-
-    category = result.get(
-        "category",
-        "other"
-    )
-
-    if category not in allowed_categories:
-
-        category = "other"
-
-    result["category"] = category
-
-    # ======================================
-    # BOOLEAN
-    # ======================================
-
-    result["is_good_for_shorts"] = bool(
-        result.get(
-            "is_good_for_shorts",
-            False
-        )
-    )
-
-    # ======================================
-    # HARD SAFETY RULES
+    # HARD RULES
     # ======================================
 
     if result["specificity"] < 5:
@@ -530,75 +373,195 @@ def normalize_result(
 
         result["is_good_for_shorts"] = False
 
-    # ======================================
-    # REASON
-    # ======================================
-
-    if not result.get("reason"):
-
-        result["reason"] = ""
-
     return result
 
 
 # ==========================================
-# PARSE AI RESPONSE
+# JUDGE MULTIPLE TOPICS
 # ==========================================
 
-def parse_response(
-    text,
-    topics
-):
+def judge_topics(topics):
 
-    text = clean_json(
-        text
-    )
+    print()
+    print("================================")
+    print("🤖 AI TREND JUDGE V4")
+    print("================================")
 
-    if not text:
+    if not topics:
 
-        raise ValueError(
-            "Gemini returned empty response"
+        print(
+            "❌ No topics for AI Judge"
         )
 
+        return []
+
+    print(
+        f"📊 Topics for AI Judge: {len(topics)}"
+    )
+
+    print()
+
+    # ======================================
+    # BUILD TOPIC LIST
+    # ======================================
+
+    numbered_topics = []
+
+    for index, topic in enumerate(
+        topics,
+        start=1
+    ):
+
+        numbered_topics.append(
+            f"{index}. {topic}"
+        )
+
+    topic_text = "\n".join(
+        numbered_topics
+    )
+
+    prompt = f"""
+{SYSTEM_PROMPT}
+
+Analyze ALL of the following topics.
+
+IMPORTANT:
+
+Return exactly ONE JSON ARRAY.
+
+There must be exactly one result for each topic.
+
+Do not omit topics.
+
+Do not invent new topics.
+
+TOPICS:
+
+{topic_text}
+"""
+
+    # ======================================
+    # RETRY
+    # ======================================
+
+    max_attempts = 3
+
+    response = None
+
+    for attempt in range(
+        1,
+        max_attempts + 1
+    ):
+
+        try:
+
+            print(
+                f"🚀 Gemini batch request "
+                f"{attempt}/{max_attempts}"
+            )
+
+            response = client.models.generate_content(
+
+                model=MODEL_NAME,
+
+                contents=prompt
+
+            )
+
+            break
+
+        except Exception as error:
+
+            error_text = str(error)
+
+            print(
+                f"⚠️ Gemini error: "
+                f"{error_text[:500]}"
+            )
+
+            if "429" in error_text:
+
+                wait_time = 35 * attempt
+
+                print(
+                    f"⏳ Waiting "
+                    f"{wait_time}s..."
+                )
+
+                time.sleep(
+                    wait_time
+                )
+
+            else:
+
+                break
+
+    # ======================================
+    # COMPLETE FAILURE
+    # ======================================
+
+    if response is None:
+
+        print()
+        print(
+            "❌ Gemini batch request failed"
+        )
+
+        print(
+            "⚠️ Returning fallback results"
+        )
+
+        return [
+            failed_result(topic)
+            for topic in topics
+        ]
+
+    # ======================================
+    # READ RESPONSE
+    # ======================================
+
     try:
+
+        text = response.text
+
+        if not text:
+
+            raise ValueError(
+                "Empty Gemini response"
+            )
+
+        text = clean_json(
+            text
+        )
 
         data = json.loads(
             text
         )
 
-    except json.JSONDecodeError:
-
-        # ==================================
-        # TRY TO EXTRACT JSON ARRAY
-        # ==================================
-
-        start = text.find("[")
-        end = text.rfind("]")
-
-        if start == -1 or end == -1:
+        if not isinstance(
+            data,
+            list
+        ):
 
             raise ValueError(
-                "Gemini response does not contain JSON array"
+                "Gemini response is not a JSON array"
             )
 
-        data = json.loads(
-            text[
-                start:end + 1
-            ]
+    except Exception as error:
+
+        print(
+            f"❌ Failed to parse Gemini JSON: "
+            f"{error}"
         )
 
-    if not isinstance(
-        data,
-        list
-    ):
+        return [
+            failed_result(topic)
+            for topic in topics
+        ]
 
-        raise ValueError(
-            "Gemini response is not a JSON array"
-        )
-
-    # ==========================================
+    # ======================================
     # MAP RESULTS BY TOPIC
-    # ==========================================
+    # ======================================
 
     result_map = {}
 
@@ -620,33 +583,41 @@ def parse_response(
             continue
 
         result_map[
-            str(topic).strip()
+            str(topic).strip().lower()
         ] = item
 
-    # ==========================================
-    # BUILD RESULTS IN ORIGINAL ORDER
-    # ==========================================
+    # ======================================
+    # FINAL RESULTS
+    # ======================================
 
     results = []
 
-    for topic in topics:
+    for index, topic in enumerate(
+        topics,
+        start=1
+    ):
+
+        print(
+            f"🤖 [{index}/{len(topics)}] "
+            f"{topic}"
+        )
 
         item = result_map.get(
-            str(topic).strip()
+            str(topic).strip().lower()
         )
 
         if item is None:
 
-            # Try case-insensitive lookup
+            # Try fuzzy matching
             item = None
-
-            target = str(
-                topic
-            ).strip().lower()
 
             for key, value in result_map.items():
 
-                if key.lower() == target:
+                if (
+                    str(topic).lower() in key
+                    or
+                    key in str(topic).lower()
+                ):
 
                     item = value
 
@@ -654,358 +625,34 @@ def parse_response(
 
         if item is None:
 
-            results.append(
-                failed_result(
-                    topic,
-                    "AI did not return a result for this topic"
-                )
+            result = failed_result(
+                topic
             )
 
         else:
 
-            results.append(
-                normalize_result(
-                    item,
-                    topic
-                )
+            result = validate_result(
+                item,
+                topic
             )
 
-    return results
-
-
-# ==========================================
-# JUDGE ALL TOPICS
-# ==========================================
-
-def judge_topics(
-    topics
-):
-
-    print()
-    print("================================")
-    print("🤖 AI TREND JUDGE V4")
-    print("================================")
-
-    if not topics:
-
-        print(
-            "❌ No topics for AI Judge"
+        results.append(
+            result
         )
-
-        return []
-
-    # ==========================================
-    # CLEAN TOPICS
-    # ==========================================
-
-    clean_topics = []
-
-    seen = set()
-
-    for topic in topics:
-
-        if not isinstance(
-            topic,
-            str
-        ):
-
-            continue
-
-        topic = topic.strip()
-
-        if not topic:
-
-            continue
-
-        key = topic.lower()
-
-        if key in seen:
-
-            continue
-
-        seen.add(key)
-
-        clean_topics.append(
-            topic
-        )
-
-    print(
-        f"📊 Topics for AI Judge: "
-        f"{len(clean_topics)}"
-    )
-
-    print()
-
-    # ==========================================
-    # PRINT TOPICS
-    # ==========================================
-
-    for index, topic in enumerate(
-        clean_topics,
-        start=1
-    ):
-
-        print(
-            f"📥 [{index}/{len(clean_topics)}] "
-            f"{topic}"
-        )
-
-    print()
-
-    # ==========================================
-    # BUILD ONE BATCH REQUEST
-    # ==========================================
-
-    topics_json = json.dumps(
-        clean_topics,
-        ensure_ascii=False,
-        indent=2
-    )
-
-    prompt = f"""
-{SYSTEM_PROMPT}
-
-==========================================
-TOPICS TO ANALYZE
-==========================================
-
-Analyze ALL of the following topics:
-
-{topics_json}
-
-==========================================
-FINAL REQUIREMENT
-==========================================
-
-Return exactly one JSON object for every topic.
-
-Return ONLY the JSON array.
-"""
-
-    # ==========================================
-    # RETRY SETTINGS
-    # ==========================================
-
-    max_attempts = 3
-
-    retry_delay = 35
-
-    response = None
-
-    # ==========================================
-    # ONE GEMINI REQUEST
-    # ==========================================
-
-    for attempt in range(
-        1,
-        max_attempts + 1
-    ):
-
-        print(
-            f"🚀 Sending all "
-            f"{len(clean_topics)} topics "
-            f"in ONE Gemini request..."
-        )
-
-        print(
-            f"   Attempt {attempt}/{max_attempts}"
-        )
-
-        try:
-
-            response = client.models.generate_content(
-
-                model=MODEL_NAME,
-
-                contents=prompt
-
-            )
-
-            break
-
-        except Exception as error:
-
-            error_text = str(
-                error
-            )
-
-            print()
-            print(
-                f"⚠️ Gemini error: "
-                f"{error_text}"
-            )
-
-            # ==================================
-            # RATE LIMIT
-            # ==================================
-
-            if (
-                "429" in error_text
-                or
-                "RESOURCE_EXHAUSTED"
-                in error_text
-            ):
-
-                if attempt < max_attempts:
-
-                    print()
-                    print(
-                        f"⏳ Rate limit detected."
-                    )
-
-                    print(
-                        f"⏳ Waiting "
-                        f"{retry_delay} seconds..."
-                    )
-
-                    time.sleep(
-                        retry_delay
-                    )
-
-                    continue
-
-            # ==================================
-            # OTHER ERROR
-            # ==================================
-
-            print(
-                "❌ AI Judge request failed"
-            )
-
-            return [
-
-                failed_result(
-                    topic,
-                    "AI Judge request failed"
-                )
-
-                for topic in clean_topics
-
-            ]
-
-    # ==========================================
-    # NO RESPONSE
-    # ==========================================
-
-    if response is None:
-
-        print(
-            "❌ Gemini returned no response"
-        )
-
-        return [
-
-            failed_result(
-                topic,
-                "Gemini returned no response"
-            )
-
-            for topic in clean_topics
-
-        ]
-
-    # ==========================================
-    # RESPONSE TEXT
-    # ==========================================
-
-    text = getattr(
-        response,
-        "text",
-        None
-    )
-
-    if not text:
-
-        print(
-            "❌ Gemini returned empty text"
-        )
-
-        return [
-
-            failed_result(
-                topic,
-                "Gemini returned empty response"
-            )
-
-            for topic in clean_topics
-
-        ]
-
-    # ==========================================
-    # PARSE
-    # ==========================================
-
-    try:
-
-        results = parse_response(
-            text,
-            clean_topics
-        )
-
-    except Exception as error:
-
-        print()
-        print(
-            f"⚠️ JSON parsing error: "
-            f"{error}"
-        )
-
-        print()
-        print(
-            "Gemini raw response:"
-        )
-
-        print(
-            text[:5000]
-        )
-
-        return [
-
-            failed_result(
-                topic,
-                "Invalid AI JSON response"
-            )
-
-            for topic in clean_topics
-
-        ]
-
-    # ==========================================
-    # PRINT RESULTS
-    # ==========================================
-
-    print()
-    print("================================")
-    print("📊 AI JUDGE COMPLETE")
-    print("================================")
-
-    approved_count = 0
-
-    for index, result in enumerate(
-        results,
-        start=1
-    ):
-
-        approved = result.get(
-            "is_good_for_shorts",
-            False
-        )
-
-        if approved:
-
-            approved_count += 1
 
         status = (
+
             "✅ APPROVED"
-            if approved
-            else "❌ REJECTED"
-        )
 
-        print()
+            if result.get(
+                "is_good_for_shorts",
+                False
+            )
 
-        print(
-            f"🤖 [{index}/{len(results)}] "
-            f"{result.get('topic', '')}"
+            else
+
+            "❌ REJECTED"
+
         )
 
         print(
@@ -1023,21 +670,6 @@ Return ONLY the JSON array.
         )
 
         print(
-            f"   Global: "
-            f"{result.get('global_interest', 0):.0f}/10"
-        )
-
-        print(
-            f"   Viral: "
-            f"{result.get('viral_potential', 0):.0f}/10"
-        )
-
-        print(
-            f"   English: "
-            f"{result.get('english_audience', 0):.0f}/10"
-        )
-
-        print(
             f"   Story: "
             f"{result.get('story_potential', 0):.0f}/10"
         )
@@ -1052,70 +684,40 @@ Return ONLY the JSON array.
             f"{result.get('factual_confidence', 0):.0f}/10"
         )
 
-        print(
-            f"   Originality: "
-            f"{result.get('originality', 0):.0f}/10"
-        )
+        print()
 
-        print(
-            f"   Reason: "
-            f"{result.get('reason', '')}"
-        )
-
-    # ==========================================
+    # ======================================
     # SORT
-    # ==========================================
+    # ======================================
 
     results.sort(
+
         key=lambda item:
             item.get(
                 "score",
                 0
             ),
+
         reverse=True
+
     )
 
-    # ==========================================
-    # SUMMARY
-    # ==========================================
+    approved_count = sum(
 
-    print()
+        1
+
+        for item in results
+
+        if item.get(
+            "is_good_for_shorts",
+            False
+        )
+
+    )
+
     print(
-        f"📥 Analyzed: "
-        f"{len(results)}"
+        f"✅ AI approved: "
+        f"{approved_count}/{len(results)}"
     )
-
-    print(
-        f"✅ Approved: "
-        f"{approved_count}"
-    )
-
-    print(
-        f"❌ Rejected: "
-        f"{len(results) - approved_count}"
-    )
-
-    print()
 
     return results
-
-
-# ==========================================
-# OPTIONAL: JUDGE ONE TOPIC
-# ==========================================
-
-def judge_topic(
-    topic
-):
-
-    results = judge_topics(
-        [topic]
-    )
-
-    if results:
-
-        return results[0]
-
-    return failed_result(
-        topic
-    )
