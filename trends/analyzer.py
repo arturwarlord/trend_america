@@ -568,7 +568,7 @@ def analyze_trends(
     # TOP 10
     # ======================================
 
-    top_trends = analyzed[:10]
+    top_trends = analyzed[:30]
 
     print()
     print("================================")
