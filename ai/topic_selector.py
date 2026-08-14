@@ -1,7 +1,6 @@
 import os
 import json
 import re
-from typing import List, Dict
 
 from google import genai
 
@@ -13,16 +12,12 @@ from google import genai
 API_KEY = os.getenv("GEMINI_KEY")
 
 if not API_KEY:
-    raise RuntimeError("❌ GEMINI_KEY is not configured")
+    raise RuntimeError(
+        "❌ GEMINI_KEY is not configured"
+    )
 
 
 MODEL_NAME = "gemini-3.5"
-
-
-HISTORY_FILE = "topic_history.json"
-
-
-MAX_TOPICS_FOR_AI = 30
 
 
 # =========================================================
@@ -35,434 +30,604 @@ client = genai.Client(
 
 
 # =========================================================
-# HISTORY
+# HELPERS
 # =========================================================
 
-def load_history() -> List[str]:
+def clean_json_response(text):
 
-    if not os.path.exists(HISTORY_FILE):
-        return []
+    text = text.strip()
 
-    try:
-        with open(
-            HISTORY_FILE,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            data = json.load(f)
-
-        if isinstance(data, list):
-            return data
-
-        if isinstance(data, dict):
-            return data.get("topics", [])
-
-    except Exception as e:
-
-        print(
-            f"⚠️ Cannot load topic history: {e}"
-        )
-
-    return []
-
-
-# =========================================================
-# NORMALIZE
-# =========================================================
-
-def normalize_topic(topic: str) -> str:
-
-    topic = topic.lower().strip()
-
-    topic = re.sub(
-        r"[^\w\s]",
-        "",
-        topic,
-        flags=re.UNICODE
-    )
-
-    topic = re.sub(
-        r"\s+",
-        " ",
-        topic
-    )
-
-    return topic
-
-
-# =========================================================
-# DUPLICATE CHECK
-# =========================================================
-
-def is_duplicate(
-    topic: str,
-    history: List[str]
-) -> bool:
-
-    normalized = normalize_topic(topic)
-
-    for old_topic in history:
-
-        old_normalized = normalize_topic(
-            old_topic
-        )
-
-        if normalized == old_normalized:
-            return True
-
-        # Простая проверка похожих тем
-        words_a = set(normalized.split())
-        words_b = set(old_normalized.split())
-
-        if not words_a or not words_b:
-            continue
-
-        intersection = len(
-            words_a & words_b
-        )
-
-        similarity = intersection / max(
-            len(words_a),
-            len(words_b)
-        )
-
-        if similarity >= 0.75:
-            return True
-
-    return False
-
-
-# =========================================================
-# PREPARE TRENDS
-# =========================================================
-
-def prepare_topics(
-    trends: List[Dict]
-) -> List[Dict]:
-
-    history = load_history()
-
-    result = []
-
-    for trend in trends:
-
-        topic = trend.get("topic")
-
-        if not topic:
-            continue
-
-        if is_duplicate(
-            topic,
-            history
-        ):
-            print(
-                f"⏭️ Duplicate topic: {topic}"
-            )
-
-            continue
-
-        result.append(trend)
-
-    return result
-
-
-# =========================================================
-# AI SELECTION
-# =========================================================
-
-def select_with_ai(
-    trends: List[Dict]
-) -> Dict:
-
-    if not trends:
-        raise RuntimeError(
-            "❌ No suitable topics available"
-        )
-
-    trends = trends[:MAX_TOPICS_FOR_AI]
-
-    topics_text = []
-
-    for i, trend in enumerate(
-        trends,
-        start=1
-    ):
-
-        topic = trend.get(
-            "topic",
-            ""
-        )
-
-        source = trend.get(
-            "source",
-            "unknown"
-        )
-
-        score = trend.get(
-            "score",
-            0
-        )
-
-        topics_text.append(
-            f"""
-#{i}
-Topic: {topic}
-Source: {source}
-Score: {score}
-"""
-        )
-
-    topics_text = "\n".join(
-        topics_text
-    )
-
-
-    prompt = f"""
-You are an expert YouTube Shorts topic selector.
-
-Your task is to select ONE topic with the highest viral potential.
-
-The final video will be a short vertical YouTube Short.
-
-Evaluate every topic using:
-
-1. Viral potential
-2. Current relevance
-3. Curiosity
-4. Emotional impact
-5. Ability to create a strong hook
-6. Ability to explain the topic in 30-60 seconds
-7. Global audience potential
-8. Comment/discussion potential
-9. Uniqueness
-10. Potential for visual storytelling
-
-IMPORTANT:
-
-Do NOT simply select the topic with the highest numeric score.
-
-Think like a professional YouTube Shorts strategist.
-
-Avoid:
-- boring educational topics
-- extremely narrow topics
-- topics requiring long explanations
-- repetitive topics
-- topics with weak hooks
-
-Prefer:
-- surprising facts
-- mysteries
-- psychology
-- science
-- technology
-- strange events
-- human behavior
-- paradoxes
-- discoveries
-- shocking statistics
-- questions that make people want to know the answer
-
-AVAILABLE TOPICS:
-
-{topics_text}
-
-Return ONLY valid JSON.
-
-Format:
-
-{{
-    "index": 1,
-    "topic": "selected topic",
-    "reason": "short explanation",
-    "viral_score": 0,
-    "hook_score": 0,
-    "curiosity_score": 0,
-    "global_score": 0,
-    "final_score": 0
-}}
-
-All scores must be integers from 0 to 100.
-"""
-
-
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt
-    )
-
-
-    text = response.text.strip()
-
-
-    # Убираем markdown JSON если Gemini его добавил
+    # Remove markdown code fences
     text = re.sub(
-        r"^```json",
+        r"^```json\s*",
         "",
         text,
         flags=re.IGNORECASE
     )
 
     text = re.sub(
-        r"^```",
+        r"^```\s*",
         "",
         text
     )
 
     text = re.sub(
-        r"```$",
+        r"\s*```$",
         "",
         text
     )
 
-    text = text.strip()
+    return text.strip()
+
+
+# =========================================================
+# PREPARE TOPICS
+# =========================================================
+
+def prepare_topics(topics):
+
+    prepared = []
+
+    for index, topic in enumerate(
+        topics,
+        start=1
+    ):
+
+        if not isinstance(topic, dict):
+            continue
+
+        title = str(
+            topic.get(
+                "topic",
+                ""
+            )
+        ).strip()
+
+        if not title:
+            continue
+
+        prepared.append({
+
+            "index": index,
+
+            "topic": title,
+
+            "score": topic.get(
+                "score",
+                0
+            ),
+
+            "category": topic.get(
+                "category",
+                "unknown"
+            ),
+
+            "global_interest": topic.get(
+                "global_interest",
+                0
+            ),
+
+            "viral_potential": topic.get(
+                "viral_potential",
+                0
+            ),
+
+            "english_audience": topic.get(
+                "english_audience",
+                0
+            ),
+
+            "story_potential": topic.get(
+                "story_potential",
+                0
+            ),
+
+            "specificity": topic.get(
+                "specificity",
+                0
+            ),
+
+            "factual_confidence": topic.get(
+                "factual_confidence",
+                0
+            ),
+
+            "originality": topic.get(
+                "originality",
+                0
+            ),
+
+            "reason": topic.get(
+                "reason",
+                ""
+            )
+
+        })
+
+    return prepared
+
+
+# =========================================================
+# AI TOPIC SELECTOR
+# =========================================================
+
+def select_with_ai(topics):
+
+    topics_text = json.dumps(
+        topics,
+        ensure_ascii=False,
+        indent=2
+    )
+
+    prompt = f"""
+You are the final topic selector for an automated
+GLOBAL ENGLISH YouTube Shorts channel.
+
+The topics below have ALREADY passed a strict AI Judge.
+
+Your job is NOT to reject them again.
+
+Your job is to select EXACTLY ONE topic that has
+the strongest potential to become a viral,
+informational YouTube Short.
+
+IMPORTANT:
+
+The final video will be:
+
+- English
+- 30-60 seconds
+- vertical YouTube Short
+- informational
+- designed for a global audience
+- based on factual information
+- narrated with AI voice
+- supported by stock footage
+
+Evaluate the candidates using:
+
+1. Viral potential
+2. Curiosity
+3. Strength of the opening hook
+4. Global audience appeal
+5. Storytelling potential
+6. Ability to explain the topic quickly
+7. Visual storytelling potential
+8. Factual reliability
+9. Originality
+10. Potential for comments/discussion
+11. Current relevance
+12. Potential to make viewers watch until the end
+
+IMPORTANT:
+
+Do NOT automatically choose the candidate
+with the highest existing AI score.
+
+The existing score is only one signal.
+
+For example:
+
+A topic with score 77 is NOT automatically better
+than a topic with score 69.
+
+Prefer a topic that creates a strong question
+in the viewer's mind.
+
+Good examples:
+
+"Why does this happen?"
+
+"Scientists discovered something strange..."
+
+"Nobody expected this..."
+
+"This changes what we thought about..."
+
+"Here's why..."
+
+Avoid topics that are:
+
+- too generic
+- too technical
+- too local
+- difficult to explain in under 60 seconds
+- dependent on long context
+- boring without visual explanation
+
+The selected topic must be suitable for
+an English global YouTube Shorts channel.
+
+CANDIDATE TOPICS:
+
+{topics_text}
+
+Return ONLY valid JSON.
+
+Use exactly this structure:
+
+{{
+    "selected_index": 1,
+    "topic": "exact topic from candidates",
+    "final_score": 0,
+    "hook_score": 0,
+    "curiosity_score": 0,
+    "global_score": 0,
+    "story_score": 0,
+    "visual_score": 0,
+    "reason": "short explanation why this topic is the best choice",
+    "suggested_hook": "one powerful English hook for the Short"
+}}
+
+Rules:
+
+- selected_index must match one of the candidate indexes.
+- topic must exactly match the selected candidate.
+- Scores must be integers from 0 to 100.
+- final_score must represent the overall quality.
+- suggested_hook must be short and attention-grabbing.
+- Do not include Markdown.
+- Do not include additional fields.
+"""
+
+
+    response = client.models.generate_content(
+
+        model=MODEL_NAME,
+
+        contents=prompt
+
+    )
+
+
+    if not response.text:
+
+        raise RuntimeError(
+            "❌ Topic Selector returned empty response"
+        )
+
+
+    raw_text = response.text.strip()
+
+    clean_text = clean_json_response(
+        raw_text
+    )
 
 
     try:
 
-        result = json.loads(text)
+        result = json.loads(
+            clean_text
+        )
 
     except json.JSONDecodeError:
 
+        print()
+        print(
+            "❌ Invalid JSON from Topic Selector:"
+        )
+
+        print(
+            raw_text
+        )
+
         raise RuntimeError(
-            "❌ AI returned invalid JSON:\n"
-            + text
+            "Topic Selector returned invalid JSON"
         )
 
 
-    index = result.get("index")
+    return result
+
+
+# =========================================================
+# VALIDATE RESULT
+# =========================================================
+
+def validate_selection(
+    result,
+    topics
+):
+
+    selected_index = result.get(
+        "selected_index"
+    )
 
     if not isinstance(
-        index,
+        selected_index,
         int
     ):
+
         raise RuntimeError(
-            "❌ AI returned invalid topic index"
+            "❌ Invalid selected_index"
         )
 
 
-    if index < 1 or index > len(trends):
+    if selected_index < 1:
 
         raise RuntimeError(
-            "❌ AI returned topic index outside available range"
+            "❌ selected_index is below 1"
         )
 
 
-    selected = trends[index - 1].copy()
+    if selected_index > len(topics):
+
+        raise RuntimeError(
+            "❌ selected_index is outside candidate range"
+        )
 
 
-    selected["ai_reason"] = result.get(
-        "reason",
-        ""
+    selected_candidate = topics[
+        selected_index - 1
+    ]
+
+
+    selected_topic = str(
+        result.get(
+            "topic",
+            ""
+        )
+    ).strip()
+
+
+    # AI must return the exact topic
+    if selected_topic != selected_candidate["topic"]:
+
+        print(
+            "⚠️ AI topic text differs from candidate."
+        )
+
+        print(
+            f"AI:        {selected_topic}"
+        )
+
+        print(
+            f"Candidate: {selected_candidate['topic']}"
+        )
+
+        # Use trusted candidate value
+        selected_topic = selected_candidate[
+            "topic"
+        ]
+
+
+    result["topic"] = selected_topic
+
+
+    # Keep original Judge data
+    result["category"] = selected_candidate.get(
+        "category",
+        "unknown"
     )
 
-    selected["viral_score"] = result.get(
-        "viral_score",
+    result["judge_score"] = selected_candidate.get(
+        "score",
         0
     )
 
-    selected["hook_score"] = result.get(
-        "hook_score",
+    result["global_interest"] = selected_candidate.get(
+        "global_interest",
         0
     )
 
-    selected["curiosity_score"] = result.get(
-        "curiosity_score",
+    result["viral_potential"] = selected_candidate.get(
+        "viral_potential",
         0
     )
 
-    selected["global_score"] = result.get(
-        "global_score",
+    result["english_audience"] = selected_candidate.get(
+        "english_audience",
         0
     )
 
-    selected["final_score"] = result.get(
-        "final_score",
+    result["story_potential"] = selected_candidate.get(
+        "story_potential",
+        0
+    )
+
+    result["specificity"] = selected_candidate.get(
+        "specificity",
+        0
+    )
+
+    result["factual_confidence"] = selected_candidate.get(
+        "factual_confidence",
+        0
+    )
+
+    result["originality"] = selected_candidate.get(
+        "originality",
         0
     )
 
 
-    return selected
+    return result
 
 
 # =========================================================
-# MAIN SELECTOR
+# PUBLIC FUNCTION
 # =========================================================
 
-def select_topic(
-    trends: List[Dict]
-) -> Dict:
+def select_topic(topics):
 
     print()
-    print("=" * 32)
-    print("🎯 AI TOPIC SELECTOR")
-    print("=" * 32)
-
-
     print(
-        f"📊 Input trends: {len(trends)}"
+        "================================"
     )
-
-
-    candidates = prepare_topics(
-        trends
-    )
-
-
     print(
-        f"🧹 After duplicate filter: {len(candidates)}"
+        "🎯 AI TOPIC SELECTOR"
     )
+    print(
+        "================================"
+    )
+    print()
 
 
-    if not candidates:
+    if not topics:
 
-        raise RuntimeError(
-            "❌ No new topics available"
+        print(
+            "❌ No approved topics available"
         )
 
+        return None
 
-    selected = select_with_ai(
-        candidates
+
+    prepared_topics = prepare_topics(
+        topics
     )
 
+
+    if not prepared_topics:
+
+        print(
+            "❌ No valid topics available"
+        )
+
+        return None
+
+
+    print(
+        f"📥 Approved candidates: "
+        f"{len(prepared_topics)}"
+    )
+
+    print()
+
+
+    for item in prepared_topics:
+
+        print(
+            f"#{item['index']} "
+            f"{item['topic']}"
+        )
+
+        print(
+            f"   Judge Score: "
+            f"{item['score']}/100"
+        )
+
+        print(
+            f"   Viral: "
+            f"{item['viral_potential']}/10"
+        )
+
+        print(
+            f"   Global: "
+            f"{item['global_interest']}/10"
+        )
+
+        print(
+            f"   Story: "
+            f"{item['story_potential']}/10"
+        )
+
+        print()
+
+
+    # =====================================================
+    # AI SELECTION
+    # =====================================================
+
+    print(
+        "🧠 Asking AI to select the final topic..."
+    )
+
+    print()
+
+
+    result = select_with_ai(
+        prepared_topics
+    )
+
+
+    # =====================================================
+    # VALIDATION
+    # =====================================================
+
+    result = validate_selection(
+        result,
+        prepared_topics
+    )
+
+
+    # =====================================================
+    # FINAL OUTPUT
+    # =====================================================
 
     print()
     print(
-        "🏆 SELECTED TOPIC"
+        "================================"
+    )
+    print(
+        "🏆 FINAL TOPIC"
+    )
+    print(
+        "================================"
+    )
+    print()
+
+
+    print(
+        f"🔥 {result['topic']}"
+    )
+
+    print()
+
+    print(
+        f"📊 Judge Score: "
+        f"{result.get('judge_score', 0)}/100"
     )
 
     print(
-        f"🔥 {selected.get('topic')}"
+        f"🧠 Final AI Score: "
+        f"{result.get('final_score', 0)}/100"
     )
 
     print(
-        f"📈 Trend score: "
-        f"{selected.get('score', 0)}"
+        f"🎣 Hook Score: "
+        f"{result.get('hook_score', 0)}/100"
     )
 
     print(
-        f"🧠 AI score: "
-        f"{selected.get('final_score', 0)}"
+        f"❓ Curiosity: "
+        f"{result.get('curiosity_score', 0)}/100"
     )
 
     print(
-        f"🎣 Hook score: "
-        f"{selected.get('hook_score', 0)}"
+        f"🌎 Global: "
+        f"{result.get('global_score', 0)}/100"
     )
 
     print(
-        f"🌎 Global score: "
-        f"{selected.get('global_score', 0)}"
+        f"📖 Story: "
+        f"{result.get('story_score', 0)}/100"
     )
+
+    print(
+        f"🎬 Visual: "
+        f"{result.get('visual_score', 0)}/100"
+    )
+
+    print()
 
     print(
         f"💡 Reason: "
-        f"{selected.get('ai_reason', '')}"
+        f"{result.get('reason', '')}"
     )
 
+    print()
 
-    return selected
+    print(
+        f"🎣 Suggested Hook:"
+    )
+
+    print(
+        f"   {result.get('suggested_hook', '')}"
+    )
+
+    print()
+
+
+    return result
 
 
 # =========================================================
@@ -474,21 +639,59 @@ if __name__ == "__main__":
     test_topics = [
 
         {
-            "topic": "Why do humans see faces in random objects?",
-            "source": "Google",
-            "score": 92
+            "topic": "iphone 15 pro",
+            "score": 77,
+            "category": "technology",
+            "global_interest": 8,
+            "viral_potential": 7,
+            "english_audience": 9,
+            "story_potential": 7,
+            "specificity": 8,
+            "factual_confidence": 9,
+            "originality": 6,
+            "reason": "High-interest consumer technology topic."
         },
 
         {
-            "topic": "Scientists discover a strange behavior of time",
-            "source": "YouTube",
-            "score": 88
+            "topic": "google pixel 10",
+            "score": 72,
+            "category": "technology",
+            "global_interest": 7,
+            "viral_potential": 7,
+            "english_audience": 9,
+            "story_potential": 7,
+            "specificity": 7,
+            "factual_confidence": 8,
+            "originality": 6,
+            "reason": "Upcoming major tech release."
         },
 
         {
-            "topic": "The psychological trick your brain uses every day",
-            "source": "Google",
-            "score": 85
+            "topic": "australian housing market",
+            "score": 69,
+            "category": "business",
+            "global_interest": 6,
+            "viral_potential": 6,
+            "english_audience": 8,
+            "story_potential": 8,
+            "specificity": 6,
+            "factual_confidence": 8,
+            "originality": 6,
+            "reason": "Strong economic topic."
+        },
+
+        {
+            "topic": "flood situation near baitarani river",
+            "score": 65,
+            "category": "world",
+            "global_interest": 5,
+            "viral_potential": 6,
+            "english_audience": 6,
+            "story_potential": 7,
+            "specificity": 7,
+            "factual_confidence": 8,
+            "originality": 6,
+            "reason": "Real-world natural event."
         }
 
     ]
@@ -499,7 +702,6 @@ if __name__ == "__main__":
     )
 
 
-    print()
     print(
         json.dumps(
             selected,
