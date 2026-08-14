@@ -8,6 +8,7 @@ from trends.content_filter import (
     is_relevant
 )
 
+
 INPUT_FILE = "data/trend_candidates.json"
 OUTPUT_FILE = "data/top_trends.json"
 
@@ -38,12 +39,16 @@ STOP_WORDS = {
 }
 
 
+# ==========================================
+# TEXT NORMALIZATION
+# ==========================================
+
 def normalize_title(title):
 
     if not title:
         return ""
 
-    title = title.lower()
+    title = str(title).lower()
 
     title = re.sub(
         r"[^\w\s]",
@@ -61,9 +66,15 @@ def normalize_title(title):
     return title
 
 
+# ==========================================
+# KEYWORDS
+# ==========================================
+
 def get_keywords(title):
 
-    normalized = normalize_title(title)
+    normalized = normalize_title(
+        title
+    )
 
     words = normalized.split()
 
@@ -75,12 +86,25 @@ def get_keywords(title):
     }
 
 
-def similarity(title_a, title_b):
+# ==========================================
+# SIMILARITY
+# ==========================================
 
-    keywords_a = get_keywords(title_a)
-    keywords_b = get_keywords(title_b)
+def similarity(
+    title_a,
+    title_b
+):
+
+    keywords_a = get_keywords(
+        title_a
+    )
+
+    keywords_b = get_keywords(
+        title_b
+    )
 
     if not keywords_a or not keywords_b:
+
         return 0
 
     intersection = (
@@ -91,8 +115,13 @@ def similarity(title_a, title_b):
         keywords_a | keywords_b
     )
 
+    if not union:
+
+        return 0
+
     keyword_similarity = (
-        len(intersection) /
+        len(intersection)
+        /
         len(union)
     )
 
@@ -104,9 +133,14 @@ def similarity(title_a, title_b):
 
     return (
         keyword_similarity * 0.7
-        + text_similarity * 0.3
+        +
+        text_similarity * 0.3
     )
 
+
+# ==========================================
+# FIND EXISTING GROUP
+# ==========================================
 
 def find_group(
     groups,
@@ -127,16 +161,36 @@ def find_group(
     return None
 
 
-def create_groups(trends):
+# ==========================================
+# CREATE TOPIC GROUPS
+# ==========================================
+
+def create_groups(
+    trends
+):
 
     groups = []
 
     for trend in trends:
 
+        if not isinstance(
+            trend,
+            dict
+        ):
+            continue
+
         title = trend.get(
             "title",
             ""
-        ).strip()
+        )
+
+        if not isinstance(
+            title,
+            str
+        ):
+            continue
+
+        title = title.strip()
 
         if not title:
             continue
@@ -153,7 +207,9 @@ def create_groups(trends):
                 "items": []
             }
 
-            groups.append(group)
+            groups.append(
+                group
+            )
 
         group["items"].append(
             trend
@@ -162,9 +218,18 @@ def create_groups(trends):
     return groups
 
 
-def calculate_score(group):
+# ==========================================
+# CALCULATE SCORE
+# ==========================================
 
-    items = group["items"]
+def calculate_score(
+    group
+):
+
+    items = group.get(
+        "items",
+        []
+    )
 
     countries = set()
 
@@ -173,20 +238,34 @@ def calculate_score(group):
 
     total_views = 0
 
+    # ======================================
+    # COLLECT METRICS
+    # ======================================
+
     for item in items:
+
+        if not isinstance(
+            item,
+            dict
+        ):
+            continue
 
         country = item.get(
             "country"
         )
 
         if country:
-            countries.add(country)
+
+            countries.add(
+                country
+            )
 
         source = item.get(
             "source"
         )
 
         if source == "google":
+
             google_count += 1
 
         elif source == "youtube":
@@ -199,33 +278,48 @@ def calculate_score(group):
             )
 
             try:
+
                 total_views += int(
                     views
                 )
+
             except (
                 TypeError,
                 ValueError
             ):
+
                 pass
+
+    # ======================================
+    # COUNTRY SCORE
+    # ======================================
 
     country_score = min(
         len(countries) / 10,
         1
     )
 
+    # ======================================
+    # GOOGLE SCORE
+    # ======================================
+
     google_score = min(
         google_count / 10,
         1
     )
+
+    # ======================================
+    # YOUTUBE SCORE
+    # ======================================
 
     youtube_score = min(
         youtube_count / 10,
         1
     )
 
-    # Logarithmic view scoring.
-    # Prevents one extremely large
-    # video from dominating everything.
+    # ======================================
+    # VIEWS SCORE
+    # ======================================
 
     if total_views <= 0:
 
@@ -235,50 +329,126 @@ def calculate_score(group):
 
         views_score = min(
             (
-                total_views /
+                total_views
+                /
                 10_000_000
             ) ** 0.5,
             1
         )
 
-    score = (
+    # ======================================
+    # GLOBAL SCORE
+    # ======================================
+
+    global_score = (
+
         country_score * 40
-        + google_score * 20
-        + youtube_score * 20
-        + views_score * 20
+
+        +
+
+        google_score * 20
+
+        +
+
+        youtube_score * 20
+
+        +
+
+        views_score * 20
+
+    )
+
+    # ======================================
+    # CONTENT RELEVANCE
+    # ======================================
+
+    relevance_score = calculate_relevance(
+        group["representative"]
+    )
+
+    # ======================================
+    # FINAL SCORE
+    # ======================================
+
+    final_score = (
+
+        global_score * 0.60
+
+        +
+
+        relevance_score * 0.40
+
     )
 
     return {
-        "topic": group["representative"],
-        "normalized_topic": normalize_title(
-            group["representative"]
-        ),
-        "global_score": round(
-            score,
-            2
-        ),
-        "countries": sorted(
-            countries
-        ),
-        "country_count": len(
-            countries
-        ),
-        "google_count": google_count,
-        "youtube_count": youtube_count,
-        "total_views": total_views,
-        "sources": sorted(
-            set(
-                item.get(
-                    "source",
-                    ""
+
+        "topic":
+            group["representative"],
+
+        "normalized_topic":
+            normalize_title(
+                group["representative"]
+            ),
+
+        "global_score":
+            round(
+                global_score,
+                2
+            ),
+
+        "relevance_score":
+            relevance_score,
+
+        "final_score":
+            round(
+                final_score,
+                2
+            ),
+
+        "countries":
+            sorted(
+                countries
+            ),
+
+        "country_count":
+            len(
+                countries
+            ),
+
+        "google_count":
+            google_count,
+
+        "youtube_count":
+            youtube_count,
+
+        "total_views":
+            total_views,
+
+        "sources":
+            sorted(
+                set(
+                    item.get(
+                        "source",
+                        ""
+                    )
+
+                    for item in items
+
+                    if item.get(
+                        "source"
+                    )
                 )
-                for item in items
             )
-        )
     }
 
 
-def analyze_trends(trends):
+# ==========================================
+# ANALYZE TRENDS
+# ==========================================
+
+def analyze_trends(
+    trends
+):
 
     print()
     print("================================")
@@ -286,19 +456,91 @@ def analyze_trends(trends):
     print("================================")
     print()
 
+    if not isinstance(
+        trends,
+        list
+    ):
+
+        print(
+            "❌ Invalid trends data"
+        )
+
+        return []
+
     print(
         f"📥 Input trends: "
         f"{len(trends)}"
     )
 
+    # ======================================
+    # FILTER BEFORE GROUPING
+    # ======================================
+
+    relevant_trends = []
+
+    filtered_count = 0
+
+    for trend in trends:
+
+        if not isinstance(
+            trend,
+            dict
+        ):
+            continue
+
+        topic = trend.get(
+            "title",
+            ""
+        )
+
+        if not topic:
+
+            continue
+
+        if is_relevant(
+            topic
+        ):
+
+            relevant_trends.append(
+                trend
+            )
+
+        else:
+
+            filtered_count += 1
+
+            print(
+                f"🚫 Filtered: "
+                f"{topic}"
+            )
+
+    print()
+    print(
+        f"🚫 Filtered trends: "
+        f"{filtered_count}"
+    )
+
+    print(
+        f"✅ Relevant trends: "
+        f"{len(relevant_trends)}"
+    )
+
+    # ======================================
+    # GROUP SIMILAR TOPICS
+    # ======================================
+
     groups = create_groups(
-        trends
+        relevant_trends
     )
 
     print(
         f"🔗 Topic groups: "
         f"{len(groups)}"
     )
+
+    # ======================================
+    # CALCULATE SCORES
+    # ======================================
 
     analyzed = []
 
@@ -312,16 +554,26 @@ def analyze_trends(trends):
             result
         )
 
+    # ======================================
+    # SORT BY FINAL SCORE
+    # ======================================
+
     analyzed.sort(
         key=lambda item:
-            item["global_score"],
+            item["final_score"],
         reverse=True
     )
+
+    # ======================================
+    # TOP 10
+    # ======================================
 
     top_trends = analyzed[:10]
 
     print()
+    print("================================")
     print("🔥 TOP GLOBAL TRENDS")
+    print("================================")
     print()
 
     for index, trend in enumerate(
@@ -335,8 +587,18 @@ def analyze_trends(trends):
         )
 
         print(
-            f"   Score: "
+            f"   Final Score: "
+            f"{trend['final_score']}/100"
+        )
+
+        print(
+            f"   Global Score: "
             f"{trend['global_score']}/100"
+        )
+
+        print(
+            f"   Relevance: "
+            f"{trend['relevance_score']}/100"
         )
 
         print(
@@ -364,6 +626,10 @@ def analyze_trends(trends):
     return top_trends
 
 
+# ==========================================
+# SAVE TOP TRENDS
+# ==========================================
+
 def save_top_trends(
     trends
 ):
@@ -386,6 +652,7 @@ def save_top_trends(
             indent=2
         )
 
+    print()
     print(
         f"💾 Saved: {OUTPUT_FILE}"
     )
