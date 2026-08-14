@@ -46,11 +46,11 @@ COUNTRIES = [
 ]
 
 
-def collect_global_trends():
+def collect_trends():
 
     print()
     print("================================")
-    print("🌎 GLOBAL TREND SCANNER")
+    print("🌎 GLOBAL TREND ENGINE")
     print("================================")
     print()
 
@@ -63,19 +63,21 @@ def collect_global_trends():
 
         print()
         print("--------------------------------")
-        print(f"🌍 {name} ({code})")
+        print(
+            f"🌍 {name} ({code})"
+        )
         print("--------------------------------")
 
         # ==========================
-        # GOOGLE
+        # GOOGLE TRENDS
         # ==========================
 
-        google_trends = get_google_trends(
+        google = get_google_trends(
             country=code,
             limit=20
         )
 
-        for trend in google_trends:
+        for trend in google:
 
             trend["country"] = code
             trend["country_name"] = name
@@ -83,15 +85,15 @@ def collect_global_trends():
             all_trends.append(trend)
 
         # ==========================
-        # YOUTUBE
+        # YOUTUBE TRENDS
         # ==========================
 
-        youtube_trends = get_youtube_trends(
+        youtube = get_youtube_trends(
             region=code,
             limit=20
         )
 
-        for trend in youtube_trends:
+        for trend in youtube:
 
             trend["country"] = code
             trend["country_name"] = name
@@ -110,7 +112,7 @@ def collect_global_trends():
     )
 
     print(
-        f"📈 Total trends: "
+        f"📈 Total trends collected: "
         f"{len(all_trends)}"
     )
 
